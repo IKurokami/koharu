@@ -3,7 +3,26 @@
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
 # llama.cpp release tag
 LLAMA_CPP_TAG = "b8935"
-# CUDA 13.0 requires C++17
-NVCC_PREPEND_FLAGS = "-std=c++17"
+# CUDA 13.0 requires C++17 and MSVC standard preprocessor for CCCL
+NVCC_PREPEND_FLAGS = "-std=c++17 -DCCCL_IGNORE_MSVC_TRADITIONAL_PREPROCESSOR_WARNING -Xcompiler /Zc:preprocessor"
 # override nvidia-smi compute capability
 CUDA_COMPUTE_CAP = "80"
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[target.aarch64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Cấu hình sử dụng sccache để lưu trữ bộ nhớ đệm biên dịch (Compiler Cache)
+# Để kích hoạt, hãy cài đặt sccache: `cargo install sccache` và bỏ comment phần cấu hình dưới:
+[build]
+rustc-wrapper = "sccache"

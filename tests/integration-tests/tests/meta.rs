@@ -92,12 +92,16 @@ async fn google_fonts_catalog_is_non_empty() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn llm_catalog_lists_local_models() -> anyhow::Result<()> {
+async fn llm_catalog_keeps_providers_but_hides_local_models() -> anyhow::Result<()> {
     let app = TestApp::spawn().await?;
     let catalog = api::get_catalog(&app.client_config).await?;
     assert!(
-        !catalog.local_models.is_empty(),
-        "at least one local LLM model should be registered"
+        catalog.local_models.is_empty(),
+        "local LLM language models should not be exposed"
+    );
+    assert!(
+        !catalog.providers.is_empty(),
+        "external LLM providers should remain available"
     );
     Ok(())
 }

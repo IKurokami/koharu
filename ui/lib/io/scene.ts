@@ -11,6 +11,7 @@ import {
   getGetConfigQueryKey,
   getGetCurrentLlmQueryKey,
   getGetSceneJsonQueryKey,
+  importDirectory,
   importProject,
   patchConfig,
   putCurrentProject,
@@ -24,6 +25,7 @@ import type {
   ConfigPatch,
   CreateProjectRequest,
   ExportProjectRequest,
+  ImportDirectoryRequest,
   Op,
   OpenProjectRequest,
   ProjectSummary,
@@ -162,10 +164,17 @@ export async function closeProject(): Promise<void> {
 
 // Pages import ---------------------------------------------------------------
 
-export async function uploadPages(files: File[], replace: boolean): Promise<string[]> {
+export async function uploadPages(files: File[], replace: boolean, at?: number): Promise<string[]> {
   const form = new FormData()
   for (const file of files) form.append('file', file, file.name)
   form.append('replace', replace ? 'true' : 'false')
+  const chapterId = useSelectionStore.getState().chapterId
+  if (chapterId && chapterId !== 'all-chapters') {
+    form.append('chapterId', chapterId)
+  }
+  if (at !== undefined) {
+    form.append('at', String(at))
+  }
   const res = await createPages({ body: form })
   await invalidateScene()
   return res.pages
@@ -176,18 +185,22 @@ export async function uploadPages(files: File[], replace: boolean): Promise<stri
  * the per-file `readFile` IPC round-trip, skips JS-side buffering, skips
  * multipart upload — the Rust side reads + decodes + hashes in parallel.
  */
-export async function uploadPagesByPaths(paths: string[], replace: boolean): Promise<string[]> {
-  const res = await createPagesFromPaths({ paths, replace })
+export async function uploadPagesByPaths(paths: string[], replace: boolean, at?: number): Promise<string[]> {
+  const chapterId = useSelectionStore.getState().chapterId
+  const finalChapterId = chapterId && chapterId !== 'all-chapters' ? chapterId : undefined
+  const res = await createPagesFromPaths({ paths, replace, chapterId: finalChapterId, at })
   await invalidateScene()
   return res.pages
 }
 
 export async function uploadKhrArchive(file: File): Promise<ProjectSummary> {
-  const bytes = await file.arrayBuffer()
-  const summary = await importProject({
-    body: bytes,
-    headers: { 'Content-Type': 'application/zip' },
-  })
+  const summary = await importProject(file)
+  await invalidateScene()
+  return summary
+}
+
+export async function importFolderAsProject(req: ImportDirectoryRequest): Promise<ProjectSummary> {
+  const summary = await importDirectory(req)
   await invalidateScene()
   return summary
 }
@@ -238,4 +251,13 @@ export async function updateConfig(patch: ConfigPatch): Promise<void> {
 
 export function invalidateCurrentLlm(): Promise<void> {
   return invalidateLlm()
+}
+
+export async function deleteProjectById(id: string): Promise<void> {
+  const res = await fetch(`/api/v1/projects/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to delete project: ${res.statusText}`)
+  }
 }

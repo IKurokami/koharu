@@ -151,13 +151,38 @@ fn read_project_name(dir: &Utf8Path) -> Option<String> {
     None
 }
 
+fn remove_vietnamese_diacritics(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        let mapped = match ch {
+            'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ' | 'ặ' | 'ẳ' | 'ẵ' |
+            'À' | 'Á' | 'Ạ' | 'Ả' | 'Ã' | 'Â' | 'Ầ' | 'Ấ' | 'Ậ' | 'Ẩ' | 'Ẫ' | 'Ă' | 'Ằ' | 'Ắ' | 'Ặ' | 'Ẳ' | 'Ẵ' => 'a',
+            'è' | 'é' | 'ẹ' | 'ẻ' | 'ẽ' | 'ê' | 'ề' | 'ế' | 'ệ' | 'ể' | 'ễ' |
+            'È' | 'É' | 'Ẹ' | 'Ẻ' | 'Ẽ' | 'Ê' | 'Ề' | 'Ế' | 'Ệ' | 'Ể' | 'Ễ' => 'e',
+            'ì' | 'í' | 'ị' | 'ỉ' | 'ĩ' |
+            'Ì' | 'Í' | 'Ị' | 'Ỉ' | 'Ĩ' => 'i',
+            'ò' | 'ó' | 'ọ' | 'ỏ' | 'õ' | 'ô' | 'ồ' | 'ố' | 'ộ' | 'ổ' | 'ỗ' | 'ơ' | 'ờ' | 'ớ' | 'ợ' | 'ở' | 'ỡ' |
+            'Ò' | 'Ó' | 'Ọ' | 'Ỏ' | 'Õ' | 'Ô' | 'Ồ' | 'Ố' | 'Ộ' | 'Ổ' | 'Ỗ' | 'Ơ' | 'Ờ' | 'Ớ' | 'Ợ' | 'Ở' | 'Ỡ' => 'o',
+            'ù' | 'ú' | 'ụ' | 'ủ' | 'ũ' | 'ư' | 'ừ' | 'ứ' | 'ự' | 'ử' | 'ữ' |
+            'Ù' | 'Ú' | 'Ụ' | 'Ủ' | 'Ũ' | 'Ư' | 'Ừ' | 'Ứ' | 'Ự' | 'Ử' | 'Ữ' => 'u',
+            'ỳ' | 'ý' | 'ỵ' | 'ỷ' | 'ỹ' |
+            'Ỳ' | 'Ý' | 'Ỵ' | 'Ỷ' | 'Ỹ' => 'y',
+            'đ' | 'Đ' => 'd',
+            other => other,
+        };
+        out.push(mapped);
+    }
+    out
+}
+
 /// Lowercase + keep ASCII alphanumerics + `-` + `_`; collapse whitespace to
 /// `-`. Keeps the result filesystem-safe across Win/Mac/Linux without needing
 /// heavier slug libraries.
 fn slugify(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
+    let normalized = remove_vietnamese_diacritics(input);
+    let mut out = String::with_capacity(normalized.len());
     let mut prev_dash = false;
-    for ch in input.chars() {
+    for ch in normalized.chars() {
         let c = ch.to_ascii_lowercase();
         if c.is_ascii_alphanumeric() {
             out.push(c);
@@ -191,5 +216,6 @@ mod tests {
         assert_eq!(slugify("under_score_already"), "under-score-already");
         assert_eq!(slugify("你好 hello"), "hello");
         assert_eq!(slugify("--dashes--"), "dashes");
+        assert_eq!(slugify("chạy bộ"), "chay-bo");
     }
 }

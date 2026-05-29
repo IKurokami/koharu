@@ -4,7 +4,7 @@ use clap::Parser;
 use tracing_subscriber::fmt::format::FmtSpan;
 
 use koharu_llm::safe::llama_backend::LlamaBackend;
-use koharu_llm::{GenerateOptions, Language, Llm, ModelId};
+use koharu_llm::{DEFAULT_TRANSLATION_LANGUAGE, GenerateOptions, Language, Llm, ModelId};
 use koharu_runtime::{ComputePolicy, RuntimeManager, default_app_data_root};
 
 #[derive(Parser, Debug)]
@@ -64,7 +64,7 @@ struct Args {
     cpu: bool,
 
     /// override locale for translation models
-    #[arg(long, default_value = "zh-CN")]
+    #[arg(long, default_value = "vi-VN")]
     locale: String,
 }
 
@@ -96,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
     let backend = Arc::new(LlamaBackend::init()?);
 
     let mut llm = Llm::load(&runtime, args.model, args.cpu, backend).await?;
-    let target_language = Language::parse(&args.locale).unwrap_or(Language::English);
+    let target_language = Language::parse(&args.locale).unwrap_or(DEFAULT_TRANSLATION_LANGUAGE);
 
     let opts = GenerateOptions {
         max_tokens: args.max_tokens,

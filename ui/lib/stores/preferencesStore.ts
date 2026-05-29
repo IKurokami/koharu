@@ -5,6 +5,12 @@ import { persist } from 'zustand/middleware'
 
 import { getPlatform } from '@/lib/shortcutUtils'
 
+const LEGACY_CODEX_IMAGE_PROMPT =
+  'Translate all visible text to natural English, remove the original lettering, and redraw the page as a clean manga image while preserving the artwork, panel layout, speech bubbles, tone, and composition.'
+
+const DEFAULT_CODEX_IMAGE_PROMPT =
+  'Translate all visible text to natural Vietnamese, remove the original lettering, and redraw the page as a clean manga image while preserving the artwork, panel layout, speech bubbles, tone, and composition.'
+
 type PreferencesState = {
   brushConfig: {
     size: number
@@ -54,8 +60,7 @@ const initialPreferences = {
     undo: getPlatform() === 'mac' ? 'Cmd+Z' : 'Ctrl+Z',
     redo: getPlatform() === 'mac' ? 'Cmd+Shift+Z' : 'Ctrl+Shift+Z',
   },
-  codexImagePrompt:
-    'Translate all visible text to natural English, remove the original lettering, and redraw the page as a clean manga image while preserving the artwork, panel layout, speech bubbles, tone, and composition.',
+  codexImagePrompt: DEFAULT_CODEX_IMAGE_PROMPT,
   codexImageModel: 'gpt-5.5',
 }
 
@@ -97,7 +102,7 @@ export const usePreferencesStore = create<PreferencesState>()(
     }),
     {
       name: 'koharu-config',
-      version: 6,
+      version: 7,
       migrate: (persisted: any, version: number) => {
         if (version < 2 && persisted) {
           delete persisted.localLlm
@@ -128,6 +133,9 @@ export const usePreferencesStore = create<PreferencesState>()(
         if (version < 6 && persisted) {
           persisted.codexImagePrompt ??= initialPreferences.codexImagePrompt
           persisted.codexImageModel ??= initialPreferences.codexImageModel
+        }
+        if (version < 7 && persisted?.codexImagePrompt === LEGACY_CODEX_IMAGE_PROMPT) {
+          persisted.codexImagePrompt = DEFAULT_CODEX_IMAGE_PROMPT
         }
         return persisted
       },

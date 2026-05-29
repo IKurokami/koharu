@@ -308,6 +308,9 @@ impl Language {
     }
 }
 
+pub const DEFAULT_TRANSLATION_LANGUAGE: Language = Language::Vietnamese;
+pub const DEFAULT_TRANSLATION_LANGUAGE_TAG: &str = "vi-VN";
+
 pub fn supported_locales() -> Vec<String> {
     Language::iter()
         .map(|language| language.tag().to_string())
@@ -316,7 +319,7 @@ pub fn supported_locales() -> Vec<String> {
 
 pub fn language_from_tag(value: &str) -> String {
     Language::parse(value)
-        .unwrap_or(Language::English)
+        .unwrap_or(DEFAULT_TRANSLATION_LANGUAGE)
         .to_string()
 }
 
@@ -329,7 +332,10 @@ pub fn tags(languages: &[Language]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Language, language_from_tag, supported_locales, tags};
+    use super::{
+        DEFAULT_TRANSLATION_LANGUAGE, DEFAULT_TRANSLATION_LANGUAGE_TAG, Language,
+        language_from_tag, supported_locales, tags,
+    };
 
     #[test]
     fn parses_tags_aliases_and_english_names() {
@@ -343,12 +349,15 @@ mod tests {
         assert_eq!(Language::parse("tl"), Some(Language::Filipino));
         assert_eq!(Language::parse("bg-BG"), Some(Language::Bulgarian));
         assert_eq!(Language::parse("bg"), Some(Language::Bulgarian));
+        assert_eq!(Language::parse("vi-VN"), Some(Language::Vietnamese));
+        assert_eq!(Language::parse("vi"), Some(Language::Vietnamese));
     }
 
     #[test]
     fn supported_locales_returns_tags() {
         let locales = supported_locales();
         assert!(locales.contains(&"en-US".to_string()));
+        assert!(locales.contains(&"vi-VN".to_string()));
         assert!(locales.contains(&"bg-BG".to_string()));
         assert!(locales.contains(&"zh-CN".to_string()));
         assert!(locales.contains(&"yue-HK".to_string()));
@@ -357,9 +366,16 @@ mod tests {
     #[test]
     fn helper_functions_use_canonical_tags_and_english_names() {
         assert_eq!(language_from_tag("zh-TW"), "Traditional Chinese");
+        assert_eq!(language_from_tag("not-a-language"), "Vietnamese");
         assert_eq!(
             tags(&[Language::English, Language::Japanese]),
             vec!["en-US".to_string(), "ja-JP".to_string()]
         );
+    }
+
+    #[test]
+    fn default_translation_language_is_vietnamese() {
+        assert_eq!(DEFAULT_TRANSLATION_LANGUAGE, Language::Vietnamese);
+        assert_eq!(DEFAULT_TRANSLATION_LANGUAGE_TAG, "vi-VN");
     }
 }

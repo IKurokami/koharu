@@ -25,7 +25,7 @@ use utoipa::ToSchema;
 use crate::blob::BlobRef;
 use crate::font::{FontPrediction, TextDirection};
 use crate::scene::{
-    ImageData, ImageRole, MaskData, MaskRole, Node, NodeId, NodeKind, NodeKindTag, Page, PageId,
+    Chapter, ChapterId, ImageData, ImageRole, MaskData, MaskRole, Node, NodeId, NodeKind, NodeKindTag, Page, PageId,
     ProjectStyle, Scene, TextData, Transform,
 };
 use crate::style::TextStyle;
@@ -38,6 +38,10 @@ use crate::style::TextStyle;
 pub enum OpError {
     #[error("page not found: {0}")]
     PageNotFound(PageId),
+    #[error("chapter not found: {0}")]
+    ChapterNotFound(ChapterId),
+    #[error("chapter already exists: {0}")]
+    ChapterExists(ChapterId),
     #[error("node not found in page {page}: {node}")]
     NodeNotFound { page: PageId, node: NodeId },
     #[error("page already exists: {0}")]
@@ -96,6 +100,26 @@ pub enum Op {
         prev_order: Vec<PageId>,
     },
 
+    // Chapters
+    AddChapter {
+        chapter: Chapter,
+    },
+    RemoveChapter {
+        id: ChapterId,
+        prev_chapter: Chapter,
+        prev_index: usize,
+    },
+    UpdateChapter {
+        id: ChapterId,
+        patch: ChapterPatch,
+        #[serde(default)]
+        prev: ChapterPatch,
+    },
+    ReorderChapters {
+        order: Vec<ChapterId>,
+        prev_order: Vec<ChapterId>,
+    },
+
     // Nodes
     AddNode {
         page: PageId,
@@ -142,6 +166,8 @@ pub struct ProjectMetaPatch {
     pub style: Option<ProjectStyle>,
     #[serde(default)]
     pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub sync_dir: Option<Option<String>>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, ToSchema)]
@@ -153,6 +179,17 @@ pub struct PagePatch {
     pub width: Option<u32>,
     #[serde(default)]
     pub height: Option<u32>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterPatch {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub order: Option<u32>,
+    #[serde(default)]
+    pub page_ids: Option<Vec<PageId>>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, ToSchema)]
@@ -260,6 +297,7 @@ impl Op {
                     name: patch.name.as_ref().map(|_| scene.project.name.clone()),
                     style: patch.style.as_ref().map(|_| scene.project.style.clone()),
                     updated_at: patch.updated_at.as_ref().map(|_| scene.project.updated_at),
+                    sync_dir: patch.sync_dir.as_ref().map(|_| scene.project.sync_dir.clone()),
                 };
                 if let Some(name) = &patch.name {
                     scene.project.name = name.clone();
@@ -269,6 +307,9 @@ impl Op {
                 }
                 if let Some(ts) = patch.updated_at {
                     scene.project.updated_at = ts;
+                }
+                if let Some(sync_dir) = &patch.sync_dir {
+                    scene.project.sync_dir = sync_dir.clone();
                 }
             }
 
@@ -286,6 +327,15 @@ impl Op {
                 if *at < last {
                     scene.pages.move_index(last, *at);
                 }
+
+                // Sync chapter's page_ids
+                if let Some(ch_id) = page.chapter_id {
+                    if let Some(chapter) = scene.chapters.get_mut(&ch_id) {
+                        if !chapter.page_ids.contains(&page.id) {
+                            chapter.page_ids.push(page.id);
+                        }
+                    }
+                }
             }
 
             Op::RemovePage {
@@ -301,8 +351,15 @@ impl Op {
                     .pages
                     .shift_remove_index(index)
                     .ok_or(OpError::PageNotFound(*id))?;
-                *prev_page = page;
+                *prev_page = page.clone();
                 *prev_index = index;
+
+                // Sync chapter's page_ids
+                if let Some(ch_id) = page.chapter_id {
+                    if let Some(chapter) = scene.chapters.get_mut(&ch_id) {
+                        chapter.page_ids.retain(|x| x != id);
+                    }
+                }
             }
 
             Op::UpdatePage { id, patch, prev } => {
@@ -327,6 +384,54 @@ impl Op {
                 ensure_same_page_set(&scene.pages, order)?;
                 *prev_order = scene.pages.keys().copied().collect();
                 reorder_indexmap(&mut scene.pages, order);
+            }
+
+            Op::AddChapter { chapter } => {
+                if scene.chapters.contains_key(&chapter.id) {
+                    return Err(OpError::ChapterExists(chapter.id));
+                }
+                scene.chapters.insert(chapter.id, chapter.clone());
+            }
+
+            Op::RemoveChapter {
+                id,
+                prev_chapter,
+                prev_index,
+            } => {
+                let index = scene
+                    .chapters
+                    .get_index_of(id)
+                    .ok_or(OpError::ChapterNotFound(*id))?;
+                let (_, chapter) = scene
+                    .chapters
+                    .shift_remove_index(index)
+                    .ok_or(OpError::ChapterNotFound(*id))?;
+                *prev_chapter = chapter;
+                *prev_index = index;
+            }
+
+            Op::UpdateChapter { id, patch, prev } => {
+                let chapter = scene.chapters.get_mut(id).ok_or(OpError::ChapterNotFound(*id))?;
+                *prev = ChapterPatch {
+                    name: patch.name.as_ref().map(|_| chapter.name.clone()),
+                    order: patch.order.as_ref().map(|_| chapter.order),
+                    page_ids: patch.page_ids.as_ref().map(|_| chapter.page_ids.clone()),
+                };
+                if let Some(name) = &patch.name {
+                    chapter.name = name.clone();
+                }
+                if let Some(order) = patch.order {
+                    chapter.order = order;
+                }
+                if let Some(page_ids) = &patch.page_ids {
+                    chapter.page_ids = page_ids.clone();
+                }
+            }
+
+            Op::ReorderChapters { order, prev_order } => {
+                ensure_same_chapter_set(&scene.chapters, order)?;
+                *prev_order = scene.chapters.keys().copied().collect();
+                reorder_indexmap(&mut scene.chapters, order);
             }
 
             Op::AddNode { page, node, at } => {
@@ -445,6 +550,26 @@ impl Op {
                 order: prev_order.clone(),
                 prev_order: order.clone(),
             },
+            Op::AddChapter { chapter } => Op::RemoveChapter {
+                id: chapter.id,
+                prev_chapter: chapter.clone(),
+                prev_index: 0, // Not used strictly, populated by inverse on apply
+            },
+            Op::RemoveChapter {
+                prev_chapter,
+                ..
+            } => Op::AddChapter {
+                chapter: prev_chapter.clone(),
+            },
+            Op::UpdateChapter { id, patch, prev } => Op::UpdateChapter {
+                id: *id,
+                patch: prev.clone(),
+                prev: patch.clone(),
+            },
+            Op::ReorderChapters { order, prev_order } => Op::ReorderChapters {
+                order: prev_order.clone(),
+                prev_order: order.clone(),
+            },
             Op::AddNode { page, node, at } => Op::RemoveNode {
                 page: *page,
                 id: node.id,
@@ -511,6 +636,19 @@ impl Op {
                 .ok_or(OpError::PageNotFound(*id))
                 .map(|_| ()),
             Op::ReorderPages { order, .. } => ensure_same_page_set(&scene.pages, order),
+            Op::AddChapter { chapter } => {
+                if scene.chapters.contains_key(&chapter.id) {
+                    return Err(OpError::ChapterExists(chapter.id));
+                }
+                Ok(())
+            }
+            Op::RemoveChapter { id, .. } | Op::UpdateChapter { id, .. } => {
+                if !scene.chapters.contains_key(id) {
+                    return Err(OpError::ChapterNotFound(*id));
+                }
+                Ok(())
+            }
+            Op::ReorderChapters { order, .. } => ensure_same_chapter_set(&scene.chapters, order),
             Op::AddNode { page, node, at } => {
                 let page_ref = scene.page(*page).ok_or(OpError::PageNotFound(*page))?;
                 if page_ref.nodes.contains_key(&node.id) {
@@ -576,6 +714,18 @@ fn ensure_same_page_set(pages: &indexmap::IndexMap<PageId, Page>, order: &[PageI
     }
     for id in order {
         if !pages.contains_key(id) {
+            return Err(OpError::ReorderSetMismatch);
+        }
+    }
+    Ok(())
+}
+
+fn ensure_same_chapter_set(chapters: &indexmap::IndexMap<ChapterId, Chapter>, order: &[ChapterId]) -> OpResult {
+    if order.len() != chapters.len() {
+        return Err(OpError::ReorderSetMismatch);
+    }
+    for id in order {
+        if !chapters.contains_key(id) {
             return Err(OpError::ReorderSetMismatch);
         }
     }
@@ -976,5 +1126,30 @@ mod tests {
         let mut undo = op.inverse();
         undo.apply(&mut scene).unwrap();
         assert_eq!(scene.pages.keys().copied().collect::<Vec<_>>(), ids);
+    }
+
+    #[test]
+    fn chapter_ops_round_trip() {
+        let mut scene = Scene::default();
+        let chapter_id = ChapterId::new();
+        let chapter = Chapter {
+            id: chapter_id,
+            name: "Chapter 1".into(),
+            order: 1,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            page_ids: vec![],
+        };
+
+        // Test Apply AddChapter
+        let mut op = Op::AddChapter { chapter };
+        op.apply(&mut scene).unwrap();
+        assert_eq!(scene.chapters.len(), 1);
+        assert_eq!(scene.chapters.get(&chapter_id).unwrap().name, "Chapter 1");
+
+        // Test Undo AddChapter via Inverse RemoveChapter
+        let mut undo = op.inverse();
+        undo.apply(&mut scene).unwrap();
+        assert_eq!(scene.chapters.len(), 0);
     }
 }

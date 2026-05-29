@@ -16,16 +16,17 @@ import { usePreferencesStore } from '@/lib/stores/preferencesStore'
 export async function importPages(
   mode: 'replace' | 'append',
   source: 'files' | 'folder',
+  at?: number,
 ): Promise<void> {
   const picked = source === 'folder' ? await openImageFolder() : await openImageFiles()
   const replace = mode === 'replace'
   if (picked.kind === 'paths') {
     if (picked.paths.length === 0) return
-    await uploadPagesByPaths(picked.paths, replace)
+    await uploadPagesByPaths(picked.paths, replace, at)
     return
   }
   if (picked.files.length === 0) return
-  await uploadPages(picked.files, replace)
+  await uploadPages(picked.files, replace, at)
 }
 
 /**
@@ -65,6 +66,12 @@ function currentProjectName(): string | undefined {
   return snap?.scene.project?.name ?? undefined
 }
 
+/** Read the current project's sync directory path. */
+function currentProjectSyncDir(): string | null | undefined {
+  const snap = queryClient.getQueryData<SceneSnapshot>(getGetSceneJsonQueryKey())
+  return snap?.scene?.project?.syncDir
+}
+
 export async function exportCurrentProjectAs(
   format: 'khr' | 'psd' | 'rendered' | 'inpainted',
   pages?: string[],
@@ -72,6 +79,15 @@ export async function exportCurrentProjectAs(
   try {
     const defaultFont = usePreferencesStore.getState().defaultFont
     const { blob, filename } = await exportProject({ format, pages, defaultFont })
+    
+    // If syncDir exists and format is psd or rendered, backend has already saved them locally.
+    // Skip opening the save file/folder dialog.
+    const syncDir = currentProjectSyncDir()
+    if (syncDir && (format === 'psd' || format === 'rendered')) {
+      console.log(`[export] Auto-saved directly to sync folder: ${syncDir}`)
+      return
+    }
+
     const base = sanitiseBaseName(currentProjectName())
     // Prefer the server's Content-Disposition filename (matches the actual
     // bytes — a raw PNG/PSD for single-file responses, a zip for multi).

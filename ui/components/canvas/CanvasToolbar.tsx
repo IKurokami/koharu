@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  BookOpenIcon,
   LanguagesIcon,
   LoaderCircleIcon,
   ScanIcon,
@@ -37,6 +38,11 @@ import { useEditorUiStore } from '@/lib/stores/editorUiStore'
 import { useJobsStore } from '@/lib/stores/jobsStore'
 import { usePreferencesStore } from '@/lib/stores/preferencesStore'
 import { useSelectionStore } from '@/lib/stores/selectionStore'
+import { textNodesOf } from '@/hooks/useCurrentPage'
+import { useScene } from '@/hooks/useScene'
+import { applyOp, queueAutoRender } from '@/lib/io/scene'
+import { ops } from '@/lib/ops'
+import type { Op } from '@/lib/api/schemas'
 
 // ---------------------------------------------------------------------------
 // Helpers (inlined from former llmTargets util)
@@ -69,10 +75,20 @@ const flattenCatalogModels = (catalog?: LlmCatalog): SelectableLlmModel[] => [
 // ---------------------------------------------------------------------------
 
 export function CanvasToolbar() {
+  const setWebtoonPreviewOpen = useEditorUiStore((s) => s.setWebtoonPreviewOpen)
   return (
     <div className='flex items-center gap-2 border-b border-border/60 bg-card px-3 py-2 text-xs text-foreground'>
       <WorkflowButtons />
       <div className='flex-1' />
+      <Button
+        variant='outline'
+        size='xs'
+        className='gap-1.5 font-medium hover:bg-accent/80 hover:text-accent-foreground border-border/60 transition-all duration-200'
+        onClick={() => setWebtoonPreviewOpen(true)}
+      >
+        <BookOpenIcon className='size-3.5' />
+        Webtoon Preview
+      </Button>
       <LlmStatusPopover />
     </div>
   )
@@ -310,8 +326,114 @@ function LlmStatusPopover() {
       selectedLanguage: nextLanguage,
     })
   }, [llmModels, llmSelectedLanguage, selectedModel?.model, selectedTarget])
-
   const indicatorBusy = busy || llmLoading
+  const pageId = useSelectionStore((s) => s.pageId)
+  const { scene } = useScene()
+  const isProcessing = useIsProcessing()
+
+  const handleClearPage = async () => {
+    if (!pageId || !scene) return
+    const page = scene.pages[pageId]
+    if (!page) return
+    const textNodes = textNodesOf(page)
+    const clearOps = textNodes.map((node) => 
+      ops.updateNode(pageId, node.id, {
+        data: {
+          text: {
+            translation: null,
+            sprite: null,
+            spriteTransform: null,
+            renderedDirection: null,
+          }
+        } as never
+      })
+    )
+    if (clearOps.length > 0) {
+      await applyOp(ops.batch("Clear page translation", clearOps))
+      queueAutoRender(pageId)
+    }
+  }
+
+  const handleRetranslatePage = async () => {
+    if (!pageId || !scene) return
+    await handleClearPage()
+    const cfg = await getConfig()
+    if (!cfg.pipeline) return
+    const translator = cfg.pipeline.translator
+    const renderer = cfg.pipeline.renderer
+    if (!translator || !renderer) return
+    const editor = useEditorUiStore.getState()
+    const prefs = usePreferencesStore.getState()
+    await startPipeline({
+      steps: [translator, renderer],
+      pages: [pageId],
+      targetLanguage: editor.selectedLanguage,
+      systemPrompt: prefs.customSystemPrompt,
+      defaultFont: prefs.defaultFont,
+      readingOrder: editor.readingOrder === 'custom' ? undefined : editor.readingOrder,
+    })
+  }
+
+  const handleClearChapter = async () => {
+    if (!pageId || !scene) return
+    const currentPage = scene.pages[pageId]
+    if (!currentPage) return
+    const currentChapterId = currentPage.chapterId
+    
+    const chapterPages = Object.values(scene.pages).filter(
+      (p) => p.chapterId === currentChapterId
+    )
+    
+    const clearOps = chapterPages.flatMap((p) => 
+      textNodesOf(p).map((node) => 
+        ops.updateNode(p.id, node.id, {
+          data: {
+            text: {
+              translation: null,
+              sprite: null,
+              spriteTransform: null,
+              renderedDirection: null,
+            }
+          } as never
+        })
+      )
+    )
+    
+    if (clearOps.length > 0) {
+      await applyOp(ops.batch("Clear chapter translation", clearOps))
+      queueAutoRender(pageId)
+    }
+  }
+
+  const handleRetranslateChapter = async () => {
+    if (!pageId || !scene) return
+    const currentPage = scene.pages[pageId]
+    if (!currentPage) return
+    const currentChapterId = currentPage.chapterId
+    
+    const chapterPages = Object.values(scene.pages).filter(
+      (p) => p.chapterId === currentChapterId
+    )
+    const chapterPageIds = chapterPages.map((p) => p.id)
+    
+    await handleClearChapter()
+    
+    const cfg = await getConfig()
+    if (!cfg.pipeline) return
+    const translator = cfg.pipeline.translator
+    const renderer = cfg.pipeline.renderer
+    if (!translator || !renderer) return
+    const editor = useEditorUiStore.getState()
+    const prefs = usePreferencesStore.getState()
+    await startPipeline({
+      steps: [translator, renderer],
+      pages: chapterPageIds,
+      targetLanguage: editor.selectedLanguage,
+      systemPrompt: prefs.customSystemPrompt,
+      defaultFont: prefs.defaultFont,
+      readingOrder: editor.readingOrder === 'custom' ? undefined : editor.readingOrder,
+    })
+  }
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
@@ -381,7 +503,7 @@ function LlmStatusPopover() {
         <div className='px-3'>
           <Separator />
         </div>
-        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-3'>
+        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-2'>
           <span className='text-[10px] font-medium text-muted-foreground uppercase'>
             {t('llm.translationSettings')}
           </span>
@@ -412,9 +534,61 @@ function LlmStatusPopover() {
               value={customSystemPrompt ?? ''}
               onChange={(e) => setCustomSystemPrompt(e.target.value || undefined)}
               placeholder={t('llm.systemPromptPlaceholder')}
-              rows={5}
+              rows={3}
               className='min-h-0 resize-y px-2 py-1.5 text-xs leading-snug md:text-xs'
             />
+          </div>
+        </div>
+        <div className='px-3'>
+          <Separator />
+        </div>
+        <div className='flex flex-col gap-1.5 px-3 pt-2 pb-3 bg-muted/20'>
+          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
+            Công cụ dịch / Translation Tools
+          </span>
+          <div className='flex flex-col gap-2'>
+            <div className='flex items-center gap-1.5'>
+              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>Trang / Page:</span>
+              <Button
+                variant='outline'
+                size='xs'
+                className='flex-1 h-6 text-[10px] px-1'
+                disabled={!pageId || isProcessing}
+                onClick={handleClearPage}
+              >
+                Xóa / Clear
+              </Button>
+              <Button
+                variant='default'
+                size='xs'
+                className='flex-1 h-6 text-[10px] px-1'
+                disabled={!pageId || !llmReady || isProcessing}
+                onClick={handleRetranslatePage}
+              >
+                Dịch lại / Redo
+              </Button>
+            </div>
+            <div className='flex items-center gap-1.5'>
+              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>Chapter:</span>
+              <Button
+                variant='outline'
+                size='xs'
+                className='flex-1 h-6 text-[10px] px-1'
+                disabled={!pageId || isProcessing}
+                onClick={handleClearChapter}
+              >
+                Xóa / Clear
+              </Button>
+              <Button
+                variant='default'
+                size='xs'
+                className='flex-1 h-6 text-[10px] px-1'
+                disabled={!pageId || !llmReady || isProcessing}
+                onClick={handleRetranslateChapter}
+              >
+                Dịch lại / Redo
+              </Button>
+            </div>
           </div>
         </div>
       </PopoverContent>

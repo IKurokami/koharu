@@ -12,7 +12,10 @@ use std::path::PathBuf;
 use koharu_runtime::RuntimeManager;
 use strum::{EnumProperty, IntoEnumIterator};
 
-pub use language::{Language, language_from_tag, supported_locales};
+pub use language::{
+    DEFAULT_TRANSLATION_LANGUAGE, DEFAULT_TRANSLATION_LANGUAGE_TAG, Language, language_from_tag,
+    supported_locales,
+};
 pub use model::{GenerateOptions, Llm};
 pub use prompt::{ChatMessage, ChatRole};
 
@@ -395,15 +398,6 @@ impl ModelId {
 }
 
 pub async fn prefetch(runtime: &RuntimeManager) -> anyhow::Result<()> {
-    use futures::stream::{self, StreamExt, TryStreamExt};
-
-    stream::iter(ModelId::iter())
-        .map(|model| {
-            let runtime = runtime.clone();
-            async move { model.get(&runtime).await }
-        })
-        .buffer_unordered(num_cpus::get())
-        .try_collect::<Vec<_>>()
-        .await?;
+    let _ = runtime;
     Ok(())
 }

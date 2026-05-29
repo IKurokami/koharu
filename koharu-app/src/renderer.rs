@@ -89,6 +89,13 @@ pub struct Renderer {
 impl Renderer {
     pub fn new() -> Result<Self> {
         let mut fontbook = FontBook::new();
+        
+        // Load custom bundled comic fonts (000 CollectEmAll iCiel)
+        let _ = fontbook.load_from_bytes(include_bytes!("../data/fonts/000CollectEmAlliCiel-Regular.ttf").to_vec());
+        let _ = fontbook.load_from_bytes(include_bytes!("../data/fonts/000CollectEmAlliCiel-Italic.ttf").to_vec());
+        let _ = fontbook.load_from_bytes(include_bytes!("../data/fonts/000CollectEmAlliCiel-Bold.ttf").to_vec());
+        let _ = fontbook.load_from_bytes(include_bytes!("../data/fonts/000CollectEmAlliCiel-BoldItalic.ttf").to_vec());
+
         let symbol_fallbacks = load_symbol_fallbacks(&mut fontbook);
         let app_data_root = koharu_runtime::default_app_data_root();
         let google_fonts = Arc::new(

@@ -60,6 +60,7 @@
     "new": "New project",
     "newDescription": "Start blank, import pages later",
     "importKhr": "Import .khr archive",
+    "importFolder": "Import Folder",
     "projects": "Recent",
     "emptyHint": "Your recent projects will appear here",
     "newDialogTitle": "New project",

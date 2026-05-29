@@ -63,7 +63,8 @@ export function MenuBar() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<TabId>('appearance')
   const hasPage = useSelectionStore((s) => s.pageId !== null)
-  const hasScene = useScene().scene !== null
+  const { scene } = useScene()
+  const hasScene = scene !== null
   const shortcuts = usePreferencesStore((state) => state.shortcuts)
   const isMac = useMemo(() => getPlatform() === 'mac', [])
 
@@ -89,9 +90,23 @@ export function MenuBar() {
     ].filter((s): s is string => !!s)
     const editor = useEditorUiStore.getState()
     const prefs = usePreferencesStore.getState()
+
+    let pages: string[] | undefined = undefined
+    if (opts.pageId) {
+      pages = [opts.pageId]
+    } else {
+      const chapterId = useSelectionStore.getState().chapterId
+      if (chapterId && chapterId !== 'all-chapters' && scene?.chapters) {
+        const chapter = scene.chapters[chapterId]
+        if (chapter && chapter.pageIds) {
+          pages = chapter.pageIds
+        }
+      }
+    }
+
     await startPipeline({
       steps,
-      pages: opts.pageId ? [opts.pageId] : undefined,
+      pages,
       targetLanguage: editor.selectedLanguage,
       systemPrompt: prefs.customSystemPrompt,
       defaultFont: prefs.defaultFont,
@@ -117,6 +132,12 @@ export function MenuBar() {
       onSelect: () => void exportCurrentProjectAs('psd', [requirePageId()]),
       disabled: !hasPage,
       testId: 'menu-file-export-psd',
+    },
+    {
+      label: "Xuất tất cả PSD / Export all PSDs...",
+      onSelect: () => void exportCurrentProjectAs('psd'),
+      disabled: !hasScene,
+      testId: 'menu-file-export-all-psd',
     },
     {
       label: t('menu.exportAllInpainted'),

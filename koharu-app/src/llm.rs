@@ -23,9 +23,8 @@ use koharu_llm::providers::{
     all_provider_descriptors, build_provider, discover_models,
 };
 use koharu_llm::safe::llama_backend::LlamaBackend;
-use koharu_llm::{Language, Llm, ModelId, language::tags as language_tags};
+use koharu_llm::{DEFAULT_TRANSLATION_LANGUAGE, Language, Llm, ModelId};
 use koharu_runtime::RuntimeManager;
-use strum::IntoEnumIterator;
 use tokio::sync::{RwLock, broadcast};
 
 // ---------------------------------------------------------------------------
@@ -206,14 +205,16 @@ impl Model {
         sources: &[String],
         target_language: Option<&str>,
         custom_system_prompt: Option<&str>,
+        custom_body: Option<&str>,
     ) -> Result<Vec<String>> {
         if sources.is_empty() {
             return Ok(Vec::new());
         }
-        let target_language = target_language
-            .and_then(Language::parse)
-            .unwrap_or(Language::English);
-        let body = format_sources(sources);
+        let target_language = resolve_target_language(target_language);
+        let body = match custom_body {
+            Some(cb) => cb.to_string(),
+            None => format_sources(sources),
+        };
 
         let mut guard = self.state.write().await;
         let translation = match &mut *guard {
@@ -261,12 +262,9 @@ impl Model {
     ) -> Result<()> {
         match request.target.kind {
             LlmTargetKind::Local => {
-                let id: ModelId =
-                    std::str::FromStr::from_str(&request.target.model_id).map_err(|_| {
-                        anyhow::anyhow!("unknown local model id: {}", request.target.model_id)
-                    })?;
-                self.load_local(id).await;
-                Ok(())
+                anyhow::bail!(
+                    "local language models are disabled; configure an external LLM provider instead"
+                )
             }
             LlmTargetKind::Provider => {
                 let provider_id = request
@@ -289,9 +287,11 @@ impl Model {
 // Catalog
 // ---------------------------------------------------------------------------
 
-/// Build the LLM catalog (local models + providers). Dynamic-provider entries
-/// perform a live model-discovery call when the provider has valid
-/// configuration; Static providers always return the baked-in list.
+/// Build the LLM catalog. Local language models are intentionally not exposed;
+/// provider-backed models remain available for external translation services.
+/// Dynamic-provider entries perform a live model-discovery call when the
+/// provider has valid configuration; static providers always return the baked-in
+/// list.
 pub async fn catalog(config: &crate::config::AppConfig, runtime: &RuntimeManager) -> LlmCatalog {
     LlmCatalog {
         local_models: local_catalog_models(),
@@ -308,13 +308,7 @@ fn provider_target(provider_id: &str, model_id: &str) -> LlmTarget {
 }
 
 fn local_catalog_models() -> Vec<LlmCatalogModel> {
-    ModelId::iter()
-        .map(|model| LlmCatalogModel {
-            target: local_target(model),
-            name: model.to_string(),
-            languages: language_tags(&model.languages()),
-        })
-        .collect()
+    Vec::new()
 }
 
 async fn provider_catalog(
@@ -494,8 +488,19 @@ fn parse_tagged_blocks(translation: &str, expected_blocks: usize) -> Result<Opti
             .map(|(next_offset, _, _)| next_offset)
             .unwrap_or(cursor.len());
         let content = cursor[..content_end].trim().to_string();
+        
+        let mut clean_lines = Vec::new();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("===") && trimmed.ends_with("===") {
+                continue;
+            }
+            clean_lines.push(line);
+        }
+        let clean_content = clean_lines.join("\n").trim().to_string();
+
         if id < expected_blocks {
-            blocks[id] = content;
+            blocks[id] = clean_content;
         }
         cursor = &cursor[content_end..];
     }
@@ -535,4 +540,45 @@ fn strip_wrapping_quotes(text: &str) -> String {
         }
     }
     trimmed.to_string()
+}
+
+fn resolve_target_language(target_language: Option<&str>) -> Language {
+    target_language
+        .and_then(Language::parse)
+        .unwrap_or(DEFAULT_TRANSLATION_LANGUAGE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{local_catalog_models, resolve_target_language};
+    use koharu_llm::Language;
+
+    #[test]
+    fn missing_target_language_defaults_to_vietnamese() {
+        assert_eq!(resolve_target_language(None), Language::Vietnamese);
+        assert_eq!(resolve_target_language(Some("")), Language::Vietnamese);
+        assert_eq!(
+            resolve_target_language(Some("not-a-language")),
+            Language::Vietnamese
+        );
+    }
+
+    #[test]
+    fn explicit_target_language_is_respected() {
+        assert_eq!(resolve_target_language(Some("en-US")), Language::English);
+        assert_eq!(resolve_target_language(Some("vi")), Language::Vietnamese);
+    }
+
+    #[test]
+    fn local_language_models_are_not_exposed_in_catalog() {
+        assert!(local_catalog_models().is_empty());
+    }
+
+    #[test]
+    fn parse_tagged_blocks_strips_page_headers() {
+        let input = "[1] Hello world\n=== Chapter 3, 094.jpg (Page Index #2) ===\n[2] How are you?\n=== Chapter 3, 095.jpg (Page Index #3) ===\n";
+        let res = super::parse_tagged_blocks(input, 2).unwrap().unwrap();
+        assert_eq!(res[0], "Hello world");
+        assert_eq!(res[1], "How are you?");
+    }
 }

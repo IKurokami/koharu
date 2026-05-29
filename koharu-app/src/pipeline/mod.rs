@@ -20,9 +20,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Result, bail};
-use koharu_core::{Op, PageId, PipelineStep};
+use koharu_core::{NodeId, Op, PageId, PipelineStep, NodeDataPatch, NodePatch, TextDataPatch};
+use crate::pipeline::engines::llm_translate::build_reinforced_system_prompt;
 use koharu_runtime::RuntimeManager;
-use tracing::Instrument;
 
 /// Observer for pipeline progress. `step_id` is the engine id of the step
 /// about to run (or just finished); step_index / page_index are 0-based.
@@ -153,13 +153,13 @@ pub async fn run(
     let mut completed: u64 = 0;
     let mut warning_count: usize = 0;
 
-    'pages: for (page_index, page_id) in pages.iter().enumerate() {
-        for (seq, &i) in order.iter().enumerate() {
-            if cancel.load(Ordering::Relaxed) {
-                bail!("cancelled");
-            }
-            let info = infos[i];
+    for (seq, &i) in order.iter().enumerate() {
+        if cancel.load(Ordering::Relaxed) {
+            bail!("cancelled");
+        }
+        let info = infos[i];
 
+        if info.id == "llm" {
             if let Some(sink) = progress.as_ref() {
                 let percent = ((completed * 100) / total_units).min(100) as u8;
                 sink(ProgressTick {
@@ -167,94 +167,306 @@ pub async fn run(
                     step_id: info.id.to_string(),
                     step_index: seq,
                     total_steps,
-                    page_index,
+                    page_index: 0,
                     total_pages,
                     overall_percent: percent,
                 });
             }
 
-            // The page must still exist (user may have deleted it mid-run).
-            if !session.scene.read().pages.contains_key(page_id) {
-                // Skip the remaining steps for a deleted page and credit all
-                // of them against total_units so progress still reaches 100%.
-                completed += (total_steps - seq) as u64;
-                continue 'pages;
+            let scene_snap = session.scene_snapshot();
+            
+            for page_chunk in pages.chunks(5) {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                
+                let mut chunk_targets: Vec<(PageId, usize, String, String, bool, String, (NodeId, String))> = Vec::new();
+                for (page_index, page_id) in pages.iter().enumerate() {
+                    if !page_chunk.contains(page_id) {
+                        continue;
+                    }
+                    if !session.scene.read().pages.contains_key(page_id) {
+                        continue;
+                    }
+                    
+                    let text_nodes_list = support::text_nodes(&scene_snap, *page_id);
+                    let page_name = scene_snap.pages.get(page_id).map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Page".to_string());
+                    let chapter_name = scene_snap.pages.get(page_id)
+                        .and_then(|p| p.chapter_id)
+                        .and_then(|cid| scene_snap.chapters.get(&cid))
+                        .map(|ch| ch.name.clone())
+                        .unwrap_or_else(|| "Unknown Chapter".to_string());
+
+                    for (node_id, _, text_data) in text_nodes_list {
+                        if let Some(ref source_text) = text_data.text {
+                            if source_text.trim().is_empty() {
+                                continue;
+                            }
+                            
+                            let is_allowed = match spec.options.text_node_ids.as_deref() {
+                                Some(ids) => ids.contains(&node_id),
+                                None => true,
+                            };
+                            if !is_allowed {
+                                continue;
+                            }
+
+                            let translation = text_data.translation.as_deref().unwrap_or("").trim().to_string();
+                            let already_translated = !translation.is_empty();
+
+                            chunk_targets.push((
+                                *page_id,
+                                page_index,
+                                page_name.clone(),
+                                chapter_name.clone(),
+                                already_translated,
+                                translation,
+                                (node_id, source_text.clone())
+                            ));
+                        }
+                    }
+                }
+
+                let has_untranslated = chunk_targets.iter().any(|(_, _, _, _, already_translated, _, _)| !*already_translated);
+
+                if !chunk_targets.is_empty() && has_untranslated {
+                    let target_lang = spec.options.target_language.as_deref().unwrap_or("Vietnamese");
+                    let first_page_id = chunk_targets[0].0;
+                    let reinforced_prompt = build_reinforced_system_prompt(
+                        &scene_snap,
+                        first_page_id,
+                        target_lang,
+                        spec.options.system_prompt.as_deref(),
+                    );
+
+                    let mut structured_body = String::new();
+                    let mut current_page_key: Option<(PageId, String)> = None;
+                    for (idx, (page_id, page_index, page_name, chapter_name, already_translated, translation, (_, source_text))) in chunk_targets.iter().enumerate() {
+                        let page_key = (*page_id, page_name.clone());
+                        if current_page_key.as_ref() != Some(&page_key) {
+                            current_page_key = Some(page_key);
+                            structured_body.push_str(&format!(
+                                "\n=== {}, {} (Page Index #{}) ===\n",
+                                chapter_name,
+                                page_name,
+                                page_index + 1
+                            ));
+                        }
+                        if *already_translated {
+                            structured_body.push_str(&format!(
+                                "[{}] (Already Translated) Original: \"{}\" -> Translated: \"{}\"\n",
+                                idx + 1,
+                                source_text,
+                                translation
+                            ));
+                        } else {
+                            structured_body.push_str(&format!("[{}]{}\n", idx + 1, source_text));
+                        }
+                    }
+
+                    let sources: Vec<String> = chunk_targets.iter().map(|(_, _, _, _, _, _, (_, s))| s.clone()).collect();
+                    
+                    match llm.translate_texts(&sources, Some(target_lang), Some(&reinforced_prompt), Some(&structured_body)).await {
+                        Ok(translations) => {
+                            let mut page_ops: std::collections::HashMap<PageId, Vec<Op>> = std::collections::HashMap::new();
+                            for ((page_id, _, _, _, already_translated, _, (node_id, _)), translation) in chunk_targets.into_iter().zip(translations) {
+                                if already_translated {
+                                    continue;
+                                }
+                                page_ops.entry(page_id).or_default().push(Op::UpdateNode {
+                                    page: page_id,
+                                    id: node_id,
+                                    patch: NodePatch {
+                                        data: Some(NodeDataPatch::Text(TextDataPatch {
+                                            translation: Some(Some(translation)),
+                                            ..Default::default()
+                                        })),
+                                        transform: None,
+                                        visible: None,
+                                    },
+                                    prev: NodePatch::default(),
+                                });
+                            }
+
+                            for (page_id, ops) in page_ops {
+                                if cancel.load(Ordering::Relaxed) {
+                                    bail!("cancelled");
+                                }
+                                if ops.is_empty() {
+                                    continue;
+                                }
+                                let batch = Op::Batch {
+                                    ops,
+                                    label: format!("llm: page {page_id}"),
+                                };
+                                if let Err(err) = session.apply(batch) {
+                                    tracing::error!("Failed to apply translation batch for page {page_id}: {err}");
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            let err_str = err.to_string();
+                            let is_no_llm = err_str.contains("no LLM loaded") || err_str.contains("LLM is still loading") || err_str.contains("LLM failed to load");
+                            if is_no_llm {
+                                tracing::warn!("LLM translate skipped: {err_str}");
+                                if let Some(sink) = warnings.as_ref() {
+                                    sink(WarningTick {
+                                        step_id: info.id.to_string(),
+                                        page_index: 0,
+                                        total_pages,
+                                        message: format!("Skipped: {err_str}. You can load LLM and translate these pages later."),
+                                    });
+                                }
+                            } else {
+                                for (page_index, page_id) in pages.iter().enumerate() {
+                                    if page_chunk.contains(page_id) {
+                                        report_step_failure(
+                                            info.id,
+                                            page_id,
+                                            seq,
+                                            page_index,
+                                            total_pages,
+                                            total_steps,
+                                            &err,
+                                            &mut warning_count,
+                                            warnings.as_ref(),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                completed += page_chunk.len() as u64;
+
+                if let Some(sink) = progress.as_ref() {
+                    let percent = ((completed * 100) / total_units).min(100) as u8;
+                    sink(ProgressTick {
+                        step: step_for(info),
+                        step_id: info.id.to_string(),
+                        step_index: seq,
+                        total_steps,
+                        page_index: 0,
+                        total_pages,
+                        overall_percent: percent,
+                    });
+                }
+            }
+        } else {
+            // Pre-load the engine once sequentially to prevent concurrent loading race conditions
+            let _ = registry.get(&info.id, &runtime, cpu).await?;
+
+            let semaphore = Arc::new(tokio::sync::Semaphore::new(4));
+            let mut tasks = Vec::new();
+
+            for (page_index, page_id) in pages.iter().enumerate() {
+                if cancel.load(Ordering::Relaxed) {
+                    bail!("cancelled");
+                }
+                
+                if !session.scene.read().pages.contains_key(page_id) {
+                    completed += 1;
+                    continue;
+                }
+
+                if let Some(sink) = progress.as_ref() {
+                    let percent = ((completed * 100) / total_units).min(100) as u8;
+                    sink(ProgressTick {
+                        step: step_for(info),
+                        step_id: info.id.to_string(),
+                        step_index: seq,
+                        total_steps,
+                        page_index,
+                        total_pages,
+                        overall_percent: percent,
+                    });
+                }
+
+                let sem = semaphore.clone();
+                let registry = registry.clone();
+                let runtime = runtime.clone();
+                let session = session.clone();
+                let llm = llm.clone();
+                let renderer = renderer.clone();
+                let spec = spec.clone();
+                let cancel = cancel.clone();
+                let page_id = *page_id;
+                let info_id = info.id.to_string();
+                let info_produces = info.produces;
+
+                tasks.push(tokio::spawn(async move {
+                    let _permit = sem.acquire().await.map_err(|e| anyhow::anyhow!("failed to acquire semaphore: {e}"))?;
+                    
+                    let scene_snap = session.scene_snapshot();
+                    if let Some(page) = scene_snap.pages.get(&page_id) {
+                        let is_inpaint_or_render = info_produces.iter().any(|&art| {
+                            art == Artifact::Inpainted || art == Artifact::FinalRender
+                        });
+                        let already_ready = !is_inpaint_or_render && info_produces.iter().all(|&art| art.ready(page));
+                        if already_ready {
+                            return Ok::<_, anyhow::Error>((page_id, page_index, Vec::new()));
+                        }
+                    }
+
+                    let engine = registry.get(&info_id, &runtime, cpu).await?;
+                    let ctx = EngineCtx {
+                        scene: &scene_snap,
+                        page: page_id,
+                        blobs: &session.blobs,
+                        runtime: &runtime,
+                        cancel: &cancel,
+                        options: &spec.options,
+                        llm: &llm,
+                        renderer: &renderer,
+                    };
+                    
+                    let ops = engine.run(ctx).await?;
+                    Ok::<_, anyhow::Error>((page_id, page_index, ops))
+                }));
             }
 
-            let engine = match registry.get(info.id, &runtime, cpu).await {
-                Ok(e) => e,
-                Err(err) => {
-                    // Engine *load* failure: same recovery as a run failure.
-                    report_step_failure(
-                        info.id,
-                        page_id,
-                        seq,
-                        page_index,
-                        total_pages,
-                        total_steps,
-                        &err,
-                        &mut warning_count,
-                        warnings.as_ref(),
-                    );
-                    completed += (total_steps - seq) as u64;
-                    continue 'pages;
+            for task in tasks {
+                if cancel.load(Ordering::Relaxed) {
+                    bail!("cancelled");
                 }
-            };
-            let scene_snap = session.scene_snapshot();
-            let ctx = EngineCtx {
-                scene: &scene_snap,
-                page: *page_id,
-                blobs: &session.blobs,
-                runtime: &runtime,
-                cancel: &cancel,
-                options: &spec.options,
-                llm: &llm,
-                renderer: &renderer,
-            };
-            let step_result = async { engine.run(ctx).await }
-                .instrument(tracing::info_span!("step", engine = info.id, page = %page_id))
-                .await;
-            let ops = match step_result {
-                Ok(ops) => ops,
-                Err(err) => {
-                    report_step_failure(
-                        info.id,
-                        page_id,
-                        seq,
-                        page_index,
-                        total_pages,
-                        total_steps,
-                        &err,
-                        &mut warning_count,
-                        warnings.as_ref(),
-                    );
-                    // Subsequent steps on this page almost always consume the
-                    // failed step's artifact; skip the rest and move on.
-                    completed += (total_steps - seq) as u64;
-                    continue 'pages;
+                match task.await {
+                    Ok(Ok((page_id, page_index, ops))) => {
+                        if cancel.load(Ordering::Relaxed) {
+                            bail!("cancelled");
+                        }
+                        completed += 1;
+                        if ops.is_empty() {
+                            continue;
+                        }
+                        let batch = Op::Batch {
+                            ops,
+                            label: format!("{}: page {}", info.id, page_id),
+                        };
+                        if let Err(err) = session.apply(batch) {
+                            report_step_failure(
+                                info.id,
+                                &page_id,
+                                seq,
+                                page_index,
+                                total_pages,
+                                total_steps,
+                                &err,
+                                &mut warning_count,
+                                warnings.as_ref(),
+                            );
+                        }
+                    }
+                    Ok(Err(err)) => {
+                        completed += 1;
+                        tracing::error!("Pipeline step failed: {err}");
+                        warning_count += 1;
+                    }
+                    Err(err) => {
+                        completed += 1;
+                        tracing::error!("Pipeline task join failed: {err}");
+                        warning_count += 1;
+                    }
                 }
-            };
-            completed += 1;
-            if ops.is_empty() {
-                continue;
-            }
-            let batch = Op::Batch {
-                ops,
-                label: format!("{}: page {}", info.id, page_id),
-            };
-            if let Err(err) = session.apply(batch) {
-                report_step_failure(
-                    info.id,
-                    page_id,
-                    seq,
-                    page_index,
-                    total_pages,
-                    total_steps,
-                    &err,
-                    &mut warning_count,
-                    warnings.as_ref(),
-                );
-                continue 'pages;
             }
         }
     }

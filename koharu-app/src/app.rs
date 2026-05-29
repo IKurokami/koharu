@@ -177,12 +177,9 @@ impl App {
 
     /// Forward LLM state transitions onto the SSE bus.
     ///
-    /// Local model loads are fire-and-forget — `Model::load_local` flips
-    /// state to `Loading` and spawns the heavy work, so the originating
-    /// HTTP route can't publish any completion event itself. This
-    /// forwarder subscribes to the Model's own state broadcast and fires
-    /// one event per transition so the UI sees Loading / Ready / Failed /
-    /// Empty accurately in real time.
+    /// This forwarder subscribes to the Model's own state broadcast and fires
+    /// one event per transition so the UI sees Loading / Ready / Failed / Empty
+    /// accurately in real time.
     pub fn spawn_llm_forwarder(&self) {
         let mut rx = self.llm.subscribe();
         let bus = self.bus.clone();

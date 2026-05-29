@@ -374,7 +374,7 @@ export function Workspace() {
                           <TextBlockLayer
                             showSprites={!showRenderedImage}
                             scale={scaleRatio}
-                            style={{ zIndex: 30 }}
+                            style={{ zIndex: 50 }}
                           />
                         )}
                         {renderedData && showRenderedImage && (

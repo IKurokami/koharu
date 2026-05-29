@@ -179,9 +179,11 @@ function PageCard({
           className='max-h-full max-w-full rounded object-contain'
         />
       </div>
-      <div className='flex w-full items-center justify-center gap-1 text-xs text-muted-foreground'>
+      <div className='flex w-full items-center justify-center gap-1 text-xs text-muted-foreground px-1 min-w-0'>
         <GripVerticalIcon className='h-3.5 w-3.5 shrink-0' />
-        <span className='font-semibold text-foreground'>{index + 1}</span>
+        <span className='font-semibold text-foreground truncate' title={name || `Page ${index + 1}`}>
+          {index + 1}. {name || `Page ${index + 1}`}
+        </span>
       </div>
     </div>
   )

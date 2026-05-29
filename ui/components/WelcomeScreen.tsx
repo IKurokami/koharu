@@ -5,7 +5,9 @@ import {
   ArrowRightIcon,
   ClockIcon,
   FileArchiveIcon,
+  FolderIcon,
   PlusIcon,
+  Trash2Icon,
   XIcon,
 } from 'lucide-react'
 import Image from 'next/image'
@@ -27,8 +29,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useListProjects } from '@/lib/api/default/default'
 import type { ProjectSummary } from '@/lib/api/schemas'
 import { importKhrFile } from '@/lib/io/pagesIo'
-import { createAndOpenProject, switchProject } from '@/lib/io/scene'
+import { createAndOpenProject, switchProject, deleteProjectById, importFolderAsProject } from '@/lib/io/scene'
 import { cn } from '@/lib/utils'
+import { isTauri } from '@/lib/backend'
 
 type Busy = false | 'new' | 'open' | 'import'
 
@@ -48,6 +51,24 @@ export function WelcomeScreen() {
   const [busy, setBusy] = useState<Busy>(false)
   const [error, setError] = useState<string | null>(null)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
+
+  const onDeleteConfirm = useCallback(async () => {
+    if (!projectToDelete) return
+    setError(null)
+    setBusy('open')
+    try {
+      await deleteProjectById(projectToDelete)
+      await refetchProjects()
+    } catch (e) {
+      setError(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+      setDeleteConfirmOpen(false)
+      setProjectToDelete(null)
+    }
+  }, [projectToDelete, refetchProjects])
 
   const openById = useCallback(async (id: string) => {
     setError(null)
@@ -79,6 +100,25 @@ export function WelcomeScreen() {
     setBusy('import')
     try {
       await importKhrFile()
+      await refetchProjects()
+    } catch (e) {
+      setError(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [refetchProjects])
+
+  const importFolder = useCallback(async () => {
+    setError(null)
+    setBusy('import')
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const folder = await open({ directory: true, multiple: false })
+      if (!folder || typeof folder !== 'string') {
+        setBusy(false)
+        return
+      }
+      await importFolderAsProject({ path: folder })
       await refetchProjects()
     } catch (e) {
       setError(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -135,6 +175,15 @@ export function WelcomeScreen() {
             icon={<FileArchiveIcon className='h-4 w-4' />}
             label={t('welcome.importKhr')}
           />
+          {isTauri() && (
+            <SecondaryAction
+              onClick={importFolder}
+              disabled={!!busy}
+              loading={busy === 'import'}
+              icon={<FolderIcon className='h-4 w-4' />}
+              label={t('welcome.importFolder') || 'Import Folder'}
+            />
+          )}
         </div>
 
         <section className='flex flex-col gap-2'>
@@ -152,7 +201,16 @@ export function WelcomeScreen() {
             <ScrollArea className='h-48 rounded-lg border border-border/60 bg-card/30'>
               <ul className='flex flex-col divide-y divide-border/40'>
                 {projects.map((p) => (
-                  <ProjectRow key={p.id} project={p} onOpen={openById} disabled={busy === 'open'} />
+                  <ProjectRow
+                    key={p.id}
+                    project={p}
+                    onOpen={openById}
+                    onDelete={(id) => {
+                      setProjectToDelete(id)
+                      setDeleteConfirmOpen(true)
+                    }}
+                    disabled={busy === 'open'}
+                  />
                 ))}
               </ul>
             </ScrollArea>
@@ -168,6 +226,25 @@ export function WelcomeScreen() {
         onSubmit={onCreate}
         busy={busy === 'new'}
       />
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this project? All scene data, layers, images, and translations will be permanently removed. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setDeleteConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant='destructive' onClick={onDeleteConfirm}>
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -278,32 +355,49 @@ function RecentSkeleton() {
 function ProjectRow({
   project,
   onOpen,
+  onDelete,
   disabled,
 }: {
   project: ProjectSummary
   onOpen: (id: string) => void
+  onDelete?: (id: string) => void
   disabled?: boolean
 }) {
   const when = project.updatedAtMs && project.updatedAtMs > 0 ? new Date(project.updatedAtMs) : null
   return (
-    <li>
+    <li className='group/row relative flex items-center justify-between hover:bg-muted/40'>
       <button
         type='button'
         onClick={() => onOpen(project.id)}
         disabled={disabled}
-        className='flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left outline-none focus-visible:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-60'
+        className='flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60'
       >
         <div className='flex min-w-0 flex-1 flex-col'>
           <div className='truncate text-sm font-medium text-foreground'>{project.name}</div>
           <div className='truncate text-[11px] text-muted-foreground'>{project.id}</div>
         </div>
         {when && (
-          <div className='flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground'>
+          <div className='mr-2 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground group-hover/row:mr-12 transition-all duration-200'>
             <ClockIcon className='h-3 w-3' />
             {formatRelative(when)}
           </div>
         )}
       </button>
+      {onDelete && (
+        <Button
+          variant='ghost'
+          size='icon'
+          className='absolute right-2 shrink-0 h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 cursor-pointer'
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(project.id)
+          }}
+          disabled={disabled}
+          title="Delete Project"
+        >
+          <Trash2Icon className='h-4 w-4' />
+        </Button>
+      )}
     </li>
   )
 }

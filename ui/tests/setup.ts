@@ -25,7 +25,7 @@ beforeEach(() => queryClient.clear())
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
-    i18n: { language: 'en-US', changeLanguage: async () => {} },
+    i18n: { language: 'vi-VN', changeLanguage: async () => {} },
   }),
   Trans: ({ i18nKey, children }: { i18nKey?: string; children?: unknown }) =>
     (i18nKey ?? (children as never)) as never,

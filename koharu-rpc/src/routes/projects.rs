@@ -11,13 +11,16 @@
 
 use axum::Json;
 use axum::body::{Body, Bytes};
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use koharu_app::projects as project_dirs;
 use koharu_core::{ImageRole, PageId, ProjectSummary};
 use serde::{Deserialize, Serialize};
 use utoipa_axum::{router::OpenApiRouter, routes};
+use rayon::prelude::*;
+use chrono::Utc;
+use image::GenericImageView;
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
@@ -27,8 +30,10 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(list_projects))
         .routes(routes!(create_project))
         .routes(routes!(import_project))
+        .routes(routes!(import_directory))
         .routes(routes!(put_current_project))
         .routes(routes!(delete_current_project))
+        .routes(routes!(delete_project_by_id))
         .routes(routes!(export_current_project))
 }
 
@@ -132,6 +137,26 @@ async fn delete_current_project(State(app): State<AppState>) -> ApiResult<axum::
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(delete, path = "/projects/{id}", responses((status = 204)))]
+async fn delete_project_by_id(
+    State(app): State<AppState>,
+    Path(id): Path<String>,
+) -> ApiResult<axum::http::StatusCode> {
+    let config = (**app.config.load()).clone();
+    let path = project_dirs::project_path(&config, &id)
+        .map_err(|e| ApiError::bad_request(format!("{e:#}")))?;
+    if path.exists() {
+        if let Some(session) = app.current_session() {
+            if session.dir == path {
+                app.close_project().await.map_err(ApiError::internal)?;
+            }
+        }
+        std::fs::remove_dir_all(path.as_std_path())
+            .map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
+    }
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
 // ---------------------------------------------------------------------------
 // POST /projects/import — extract an archive into a fresh allocated dir
 // ---------------------------------------------------------------------------
@@ -168,6 +193,182 @@ async fn import_project(
         .open_project(dest, None)
         .await
         .map_err(ApiError::internal)?;
+    Ok(Json(koharu_app::app::project_summary(&session)))
+}
+
+// ---------------------------------------------------------------------------
+// POST /projects/import-directory — import a structured folder
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportDirectoryRequest {
+    pub path: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/projects/import-directory",
+    request_body = ImportDirectoryRequest,
+    responses((status = 200, body = ProjectSummary))
+)]
+async fn import_directory(
+    State(app): State<AppState>,
+    Json(req): Json<ImportDirectoryRequest>,
+) -> ApiResult<Json<ProjectSummary>> {
+    let import_path = std::path::Path::new(&req.path);
+    if !import_path.is_dir() {
+        return Err(ApiError::bad_request(format!("Not a valid directory: {}", req.path)));
+    }
+
+    let project_name = import_path.file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| ApiError::bad_request("invalid directory path"))?
+        .to_string();
+
+    let config = (**app.config.load()).clone();
+    let dest_path = project_dirs::allocate_named(&config, &project_name).map_err(ApiError::internal)?;
+    std::fs::remove_dir(dest_path.as_std_path()).map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
+
+    let session = app.open_project(dest_path, Some(project_name.clone())).await.map_err(ApiError::internal)?;
+
+    // Set sync_dir metadata in ProjectMeta
+    session.apply(koharu_core::Op::UpdateProjectMeta {
+        patch: koharu_core::ProjectMetaPatch {
+            name: None,
+            style: None,
+            updated_at: None,
+            sync_dir: Some(Some(req.path.clone())),
+        },
+        prev: Default::default(),
+    }).map_err(ApiError::internal)?;
+
+    // List chapters
+    let mut chapter_dirs = Vec::new();
+    let entries = std::fs::read_dir(import_path)
+        .map_err(|e| ApiError::bad_request(format!("Failed to read directory: {e}")))?;
+    for entry in entries.flatten() {
+        if let Ok(ftype) = entry.file_type() {
+            if ftype.is_dir() {
+                chapter_dirs.push(entry.path());
+            }
+        }
+    }
+
+    chapter_dirs.sort_by(|a, b| {
+        let af = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let bf = b.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        natord::compare(af, bf)
+    });
+
+    for (ch_idx, chapter_path) in chapter_dirs.into_iter().enumerate() {
+        let chapter_name = chapter_path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled Chapter")
+            .to_string();
+        let chapter_id = koharu_core::ChapterId::new();
+        let now = Utc::now();
+        let chapter = koharu_core::Chapter {
+            id: chapter_id,
+            name: chapter_name.clone(),
+            order: ch_idx as u32,
+            created_at: now,
+            updated_at: now,
+            page_ids: Vec::new(),
+        };
+
+        session.apply(koharu_core::Op::AddChapter { chapter })
+            .map_err(ApiError::internal)?;
+
+        let raw_dir = chapter_path.join("raw");
+        let psd_dir = chapter_path.join("psd");
+        let trans_dir = chapter_path.join("translated").join("vi-Vn");
+        let _ = std::fs::create_dir_all(&raw_dir);
+        let _ = std::fs::create_dir_all(&psd_dir);
+        let _ = std::fs::create_dir_all(&trans_dir);
+
+        let mut raw_files = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&raw_dir) {
+            for entry in entries.flatten() {
+                if let Ok(ftype) = entry.file_type() {
+                    if ftype.is_file() {
+                        let path = entry.path();
+                        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                            let ext_lower = ext.to_lowercase();
+                            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" || ext_lower == "webp" || ext_lower == "bmp" {
+                                raw_files.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        raw_files.sort_by(|a, b| {
+            let af = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            let bf = b.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            natord::compare(af, bf)
+        });
+
+        let blobs = session.blobs.clone();
+        let decoded: Vec<(String, u32, u32, koharu_core::BlobRef)> = tokio::task::spawn_blocking(move || {
+            raw_files
+                .into_par_iter()
+                .map(|path| -> ApiResult<(String, u32, u32, koharu_core::BlobRef)> {
+                    let filename = path.file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "page.png".to_string());
+                    let bytes = std::fs::read(&path)
+                        .map_err(|e| ApiError::bad_request(format!("read `{filename}`: {e}")))?;
+                    let img = image::load_from_memory(&bytes)
+                        .map_err(|e| ApiError::bad_request(format!("decode `{filename}`: {e}")))?;
+                    let (w, h) = img.dimensions();
+                    let blob = blobs.put_bytes(&bytes).map_err(ApiError::internal)?;
+                    Ok((filename, w, h, blob))
+                })
+                .collect::<ApiResult<Vec<_>>>()
+        })
+        .await
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("import task panicked: {e}")))??;
+
+        let mut ops = Vec::with_capacity(decoded.len());
+        let starting_index = session.scene.read().pages.len();
+        for (i, (filename, w, h, blob)) in decoded.into_iter().enumerate() {
+            let mut page = koharu_core::Page::new(&filename, w, h);
+            page.chapter_id = Some(chapter_id);
+            let source_node_id = koharu_core::NodeId::new();
+            page.nodes.insert(
+                source_node_id,
+                koharu_core::Node {
+                    id: source_node_id,
+                    transform: koharu_core::Transform::default(),
+                    visible: true,
+                    kind: koharu_core::NodeKind::Image(koharu_core::ImageData {
+                        role: koharu_core::ImageRole::Source,
+                        blob,
+                        opacity: 1.0,
+                        natural_width: w,
+                        natural_height: h,
+                        name: Some(filename),
+                    }),
+                },
+            );
+            ops.push(koharu_core::Op::AddPage {
+                page,
+                at: starting_index + i,
+            });
+        }
+
+        if !ops.is_empty() {
+            session.apply(koharu_core::Op::Batch {
+                ops,
+                label: format!("Import chapter {} pages", chapter_name),
+            })
+            .map_err(ApiError::internal)?;
+        }
+    }
+
     Ok(Json(koharu_app::app::project_summary(&session)))
 }
 
@@ -252,6 +453,10 @@ async fn export_current_project(
             let default_font_c = req.default_font.clone();
             let files = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
                 let mut out = Vec::with_capacity(page_ids_c.len());
+                let sync_dir = {
+                    let scene = session_c.scene.read();
+                    scene.project.sync_dir.clone()
+                };
                 for (i, id) in page_ids_c.iter().enumerate() {
                     let bytes = crate::psd_export::psd_bytes_for_page(
                         &session_c,
@@ -259,6 +464,25 @@ async fn export_current_project(
                         default_font_c.clone(),
                         *id,
                     )?;
+                    if let Some(ref s_dir) = sync_dir {
+                        let scene = session_c.scene.read();
+                        if let Some(page) = scene.pages.get(id) {
+                            let chapter_name = page.chapter_id
+                                .and_then(|ch_id| scene.chapters.get(&ch_id))
+                                .map(|ch| ch.name.as_str())
+                                .unwrap_or("Untitled Chapter");
+                            let page_stem = std::path::Path::new(&page.name)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or(&page.name);
+                            let target_dir = std::path::Path::new(s_dir)
+                                .join(chapter_name)
+                                .join("psd");
+                            let _ = std::fs::create_dir_all(&target_dir);
+                            let target_path = target_dir.join(format!("{}.psd", page_stem));
+                            let _ = std::fs::write(&target_path, &bytes);
+                        }
+                    }
                     out.push((format!("page-{:03}-{id}.psd", i + 1), bytes));
                 }
                 Ok(out)
@@ -303,8 +527,34 @@ async fn export_image_role(
     let page_ids_c = page_ids.clone();
     let files = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
         let mut out: Vec<(String, Vec<u8>)> = Vec::new();
+        let sync_dir = {
+            let scene = session_c.scene.read();
+            scene.project.sync_dir.clone()
+        };
         for (i, id) in page_ids_c.iter().enumerate() {
             if let Some(bytes) = crate::psd_export::png_bytes_for_page(&session_c, *id, role)? {
+                if role == ImageRole::Rendered {
+                    if let Some(ref s_dir) = sync_dir {
+                        let scene = session_c.scene.read();
+                        if let Some(page) = scene.pages.get(id) {
+                            let chapter_name = page.chapter_id
+                                .and_then(|ch_id| scene.chapters.get(&ch_id))
+                                .map(|ch| ch.name.as_str())
+                                .unwrap_or("Untitled Chapter");
+                            let page_stem = std::path::Path::new(&page.name)
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or(&page.name);
+                            let target_dir = std::path::Path::new(s_dir)
+                                .join(chapter_name)
+                                .join("translated")
+                                .join("vi-Vn");
+                            let _ = std::fs::create_dir_all(&target_dir);
+                            let target_path = target_dir.join(format!("{}.png", page_stem));
+                            let _ = std::fs::write(&target_path, &bytes);
+                        }
+                    }
+                }
                 out.push((format!("page-{:03}-{id}.png", i + 1), bytes));
             }
         }

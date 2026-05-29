@@ -1,8 +1,8 @@
 'use client'
 
-import { Languages, LoaderCircleIcon, Trash2Icon } from 'lucide-react'
-import { motion } from 'motion/react'
-import { useEffect } from 'react'
+import { GripVertical, Languages, LoaderCircleIcon, Trash2Icon, Eraser } from 'lucide-react'
+import { motion, Reorder } from 'motion/react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -37,6 +37,12 @@ export function TextBlocksPanel() {
   const { t } = useTranslation()
   const page = useCurrentPage()
   const textNodes = useTextNodes()
+  const [localNodes, setLocalNodes] = useState<TextNodeEntry[]>([])
+
+  useEffect(() => {
+    setLocalNodes(textNodes)
+  }, [textNodes])
+
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') {
       console.debug(
@@ -72,6 +78,23 @@ export function TextBlocksPanel() {
       ops.updateNode(page.id, nodeId, {
         data: { text: patch } as never,
       }),
+    )
+    queueAutoRender(page.id)
+  }
+
+  const clearBlockText = async (nodeId: string) => {
+    await applyOp(
+      ops.updateNode(page.id, nodeId, {
+        data: {
+          text: {
+            text: '',
+            translation: '',
+            sprite: null,
+            spriteTransform: null,
+            renderedDirection: null,
+          }
+        } as never
+      })
     )
     queueAutoRender(page.id)
   }
@@ -165,37 +188,72 @@ export function TextBlocksPanel() {
               {t('textBlocks.none')}
             </p>
           ) : (
-            <Accordion
-              data-testid='textblocks-accordion'
-              type='single'
-              collapsible
-              value={accordionValue}
-              onValueChange={(value) => {
-                if (!value) {
-                  clearSelection()
-                  return
-                }
-                const idx = Number(value)
-                const node = textNodes[idx]
-                if (node) select(node.id, false)
+            <Reorder.Group
+              axis='y'
+              values={localNodes.map((n) => n.id)}
+              onReorder={(newOrderIds) => {
+                const newLocalNodes = [...localNodes].sort((a, b) => {
+                  return newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id)
+                })
+                setLocalNodes(newLocalNodes)
               }}
               className='flex flex-col gap-1'
             >
-              {textNodes.map((node, index) => (
-                <BlockCard
-                  key={node.id}
-                  node={node}
-                  index={index}
-                  selected={selectedIds.has(node.id)}
-                  onToggleSelect={() => select(node.id, true)}
-                  onPatch={(patch) => void patchText(node.id, patch)}
-                  onDelete={() => void removeNode(node.id)}
-                  onGenerate={() => void generate(node.id)}
-                  processing={isProcessing}
-                  llmReady={llmReady}
-                />
-              ))}
-            </Accordion>
+              <Accordion
+                data-testid='textblocks-accordion'
+                type='single'
+                collapsible
+                value={accordionValue}
+                onValueChange={(value) => {
+                  if (!value) {
+                    clearSelection()
+                    return
+                  }
+                  const idx = Number(value)
+                  const node = localNodes[idx]
+                  if (node) select(node.id, false)
+                }}
+                className='flex flex-col gap-1'
+              >
+                {localNodes.map((node, index) => (
+                  <BlockCard
+                    key={node.id}
+                    node={node}
+                    index={index}
+                    selected={selectedIds.has(node.id)}
+                    onToggleSelect={() => select(node.id, true)}
+                    onPatch={(patch) => void patchText(node.id, patch)}
+                    onDelete={() => void removeNode(node.id)}
+                    onClear={() => void clearBlockText(node.id)}
+                    onGenerate={() => void generate(node.id)}
+                    onDragEnd={async () => {
+                      const prevOrder = textNodes.map((n) => n.id)
+                      const newOrder = localNodes.map((n) => n.id)
+                      if (JSON.stringify(newOrder) === JSON.stringify(prevOrder)) return
+
+                      const prevAllOrder = Object.keys(page.nodes)
+                      let textNodeIdx = 0
+                      const newAllOrder = prevAllOrder.map((id) => {
+                        if (prevOrder.includes(id)) {
+                          const nextId = newOrder[textNodeIdx]
+                          textNodeIdx++
+                          return nextId
+                        }
+                        return id
+                      })
+
+                      try {
+                        await applyOp(ops.reorderNodes(page.id, newAllOrder, prevAllOrder))
+                      } catch (err) {
+                        console.error('[reorder] Failed to reorder text nodes:', err)
+                      }
+                    }}
+                    processing={isProcessing}
+                    llmReady={llmReady}
+                  />
+                ))}
+              </Accordion>
+            </Reorder.Group>
           )}
         </div>
       </ScrollArea>
@@ -210,7 +268,9 @@ type BlockCardProps = {
   onToggleSelect: () => void
   onPatch: (patch: TextDataPatch) => void
   onDelete: () => void
+  onClear: () => void
   onGenerate: () => void
+  onDragEnd: () => void
   processing: boolean
   llmReady: boolean
 }
@@ -222,7 +282,9 @@ function BlockCard({
   onToggleSelect,
   onPatch,
   onDelete,
+  onClear,
   onGenerate,
+  onDragEnd,
   processing,
   llmReady,
 }: BlockCardProps) {
@@ -233,11 +295,14 @@ function BlockCard({
   const preview = data.translation?.trim() || data.text?.trim()
 
   return (
-    <motion.div
+    <Reorder.Item
+      value={node.id}
+      onDragEnd={onDragEnd}
       data-testid={`textblock-card-${index}`}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: index * 0.03 }}
+      className='select-none'
     >
       <AccordionItem
         value={index.toString()}
@@ -254,14 +319,17 @@ function BlockCard({
           }}
           className='flex w-full cursor-pointer items-center gap-1.5 px-2 py-1.5 text-left transition outline-none hover:no-underline data-[state=open]:bg-accent [&>svg]:hidden'
         >
-          <span
-            className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-medium text-white tabular-nums ${
-              selected ? 'bg-primary' : 'bg-muted-foreground/60'
-            }`}
-            style={{ minWidth: '1.5rem' }}
-          >
-            {index + 1}
-          </span>
+          <div className='flex items-center gap-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0'>
+            <GripVertical className='size-3' />
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-center text-[10px] font-medium text-white tabular-nums ${
+                selected ? 'bg-primary' : 'bg-muted-foreground/60'
+              }`}
+              style={{ minWidth: '1.5rem' }}
+            >
+              {index + 1}
+            </span>
+          </div>
           <div className='flex min-w-0 flex-1 items-center gap-1'>
             <span
               className={`shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-medium uppercase ${
@@ -303,6 +371,24 @@ function BlockCard({
                   {t('textBlocks.translationLabel')}
                 </span>
                 <div className='flex items-center gap-0.5'>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        data-testid={`textblock-clear-${index}`}
+                        aria-label="Xóa nội dung chữ"
+                        variant='ghost'
+                        size='icon-xs'
+                        disabled={processing}
+                        onClick={onClear}
+                        className='size-5 text-amber-600 hover:text-amber-600'
+                      >
+                        <Eraser className='size-3' />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side='left' sideOffset={4}>
+                      Xóa nội dung / Clear text
+                    </TooltipContent>
+                  </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -357,6 +443,6 @@ function BlockCard({
           </div>
         </AccordionContent>
       </AccordionItem>
-    </motion.div>
+    </Reorder.Item>
   )
 }

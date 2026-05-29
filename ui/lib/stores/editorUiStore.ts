@@ -12,6 +12,7 @@ import type { RenderEffect, RenderStroke, ToolMode } from '@/lib/types'
  */
 
 const ERROR_AUTO_DISMISS_MS = 8000
+export const DEFAULT_TRANSLATION_LANGUAGE = 'vi-VN'
 
 let dismissTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -69,6 +70,10 @@ type EditorUiState = {
   showNavigator: boolean
   setShowNavigator: (show: boolean) => void
 
+  // webtoon preview
+  webtoonPreviewOpen: boolean
+  setWebtoonPreviewOpen: (open: boolean) => void
+
   // reading order
   readingOrder: 'rtl' | 'ltr' | 'custom'
   setReadingOrder: (order: 'rtl' | 'ltr' | 'custom') => void
@@ -86,9 +91,10 @@ const initialState = {
   renderEffect: { italic: false, bold: false } as RenderEffect,
   renderStroke: undefined as RenderStroke | undefined,
   selectedTarget: undefined as LlmTarget | undefined,
-  selectedLanguage: undefined as string | undefined,
+  selectedLanguage: DEFAULT_TRANSLATION_LANGUAGE as string | undefined,
   error: undefined as { id: number; message: string } | undefined,
   showNavigator: true,
+  webtoonPreviewOpen: false,
   readingOrder: 'rtl' as const,
 }
 
@@ -145,6 +151,8 @@ export const useEditorUiStore = create<EditorUiState>((set) => ({
   },
 
   setShowNavigator: (show) => set({ showNavigator: show }),
+
+  setWebtoonPreviewOpen: (open) => set({ webtoonPreviewOpen: open }),
 
   setReadingOrder: (readingOrder) => set({ readingOrder }),
 }))

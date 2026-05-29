@@ -54,6 +54,41 @@ pub struct PageId(pub Uuid);
     ToSchema,
 )]
 #[serde(transparent)]
+pub struct ChapterId(pub Uuid);
+
+impl ChapterId {
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
+impl Default for ChapterId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for ChapterId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    ToSchema,
+)]
+#[serde(transparent)]
 pub struct NodeId(pub Uuid);
 
 impl PageId {
@@ -100,6 +135,8 @@ impl std::fmt::Display for NodeId {
 #[serde(rename_all = "camelCase")]
 pub struct Scene {
     pub project: ProjectMeta,
+    #[serde(default)]
+    pub chapters: IndexMap<ChapterId, Chapter>,
     /// Pages in insertion order; `IndexMap` ordering *is* the page order.
     pub pages: IndexMap<PageId, Page>,
 }
@@ -108,9 +145,22 @@ impl Default for Scene {
     fn default() -> Self {
         Self {
             project: ProjectMeta::default(),
+            chapters: IndexMap::new(),
             pages: IndexMap::new(),
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Chapter {
+    pub id: ChapterId,
+    pub name: String,
+    pub order: u32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub page_ids: Vec<PageId>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, ToSchema)]
@@ -121,6 +171,8 @@ pub struct ProjectMeta {
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
     pub style: ProjectStyle,
+    #[serde(default)]
+    pub sync_dir: Option<String>,
 }
 
 impl Default for ProjectMeta {
@@ -131,6 +183,7 @@ impl Default for ProjectMeta {
             created_at: now,
             updated_at: now,
             style: ProjectStyle::default(),
+            sync_dir: None,
         }
     }
 }
@@ -153,6 +206,8 @@ pub struct Page {
     pub name: String,
     pub width: u32,
     pub height: u32,
+    #[serde(default)]
+    pub chapter_id: Option<ChapterId>,
     /// Stacking = insertion order. Bottom-first: `source` is typically first,
     /// `rendered` typically last.
     pub nodes: IndexMap<NodeId, Node>,
@@ -165,6 +220,7 @@ impl Page {
             name: name.into(),
             width,
             height,
+            chapter_id: None,
             nodes: IndexMap::new(),
         }
     }
@@ -410,5 +466,25 @@ mod tests {
         assert_eq!(decoded.pages.len(), 1);
         assert_eq!(decoded.project.name, "hello");
         assert!(decoded.pages.contains_key(&page_id));
+    }
+
+    #[test]
+    fn scene_with_chapters_postcard_round_trips() {
+        let mut scene = Scene::default();
+        scene.project.name = "chapter_test".into();
+        let chapter_id = ChapterId::new();
+        let chapter = Chapter {
+            id: chapter_id,
+            name: "Chapter 1".into(),
+            order: 1,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            page_ids: vec![],
+        };
+        scene.chapters.insert(chapter_id, chapter);
+        let bytes = postcard::to_allocvec(&scene).expect("serialize");
+        let decoded: Scene = postcard::from_bytes(&bytes).expect("deserialize");
+        assert_eq!(decoded.chapters.len(), 1);
+        assert_eq!(decoded.chapters.get(&chapter_id).unwrap().name, "Chapter 1");
     }
 }

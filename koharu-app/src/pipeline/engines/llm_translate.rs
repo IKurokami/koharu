@@ -12,6 +12,97 @@ use crate::pipeline::engines::support::text_nodes;
 
 pub struct Model;
 
+pub fn build_reinforced_system_prompt(
+    scene: &Scene,
+    current_page_id: PageId,
+    target_lang: &str,
+    user_system_prompt: Option<&str>,
+) -> String {
+    let mut prompt = String::new();
+
+    prompt.push_str("You are a professional manga and comic translator.\n");
+    if let Some(user_prompt) = user_system_prompt {
+        prompt.push_str(&format!("{}\n", user_prompt));
+    }
+    
+    prompt.push_str(&format!(
+        "\nYour task is to translate the text blocks below into {}.\n",
+        target_lang
+    ));
+
+    prompt.push_str(&format!(
+        "Current Project: \"{}\"\n\n",
+        scene.project.name
+    ));
+
+    let current_page = scene.pages.get(&current_page_id);
+    let active_chapter_id = current_page.and_then(|p| p.chapter_id);
+
+    let mut same_chapter_memory = Vec::new();
+    let mut other_chapter_memory = Vec::new();
+
+    for (page_id, page) in &scene.pages {
+        if *page_id == current_page_id {
+            continue;
+        }
+        let chapter_name = page.chapter_id
+            .and_then(|cid| scene.chapters.get(&cid))
+            .map(|ch| ch.name.as_str())
+            .unwrap_or("Unknown Chapter");
+
+        let mut text_node_count = 0;
+        for node in page.nodes.values() {
+            if let koharu_core::NodeKind::Text(text_data) = &node.kind {
+                text_node_count += 1;
+                if let (Some(ocr), Some(trans)) = (&text_data.text, &text_data.translation) {
+                    let ocr_trimmed = ocr.trim();
+                    let trans_trimmed = trans.trim();
+                    if !ocr_trimmed.is_empty() && !trans_trimmed.is_empty() {
+                        let page_idx = scene.pages.get_index_of(page_id).map(|idx| idx + 1).unwrap_or(0);
+                        let entry = format!(
+                            "[{ch_name}][Page: {pg_name} (Index #{pg_idx})][Bubble #{bubble_idx}] Original: \"{ocr}\" -> Translated: \"{trans}\"",
+                            ch_name = chapter_name,
+                            pg_name = page.name,
+                            pg_idx = page_idx,
+                            bubble_idx = text_node_count,
+                            ocr = ocr_trimmed,
+                            trans = trans_trimmed
+                        );
+                        if page.chapter_id == active_chapter_id && active_chapter_id.is_some() {
+                            same_chapter_memory.push(entry);
+                        } else {
+                            other_chapter_memory.push(entry);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !same_chapter_memory.is_empty() {
+        prompt.push_str("--- CONTEXT FROM THE CURRENT CHAPTER ---\n");
+        prompt.push_str("Use the following translated blocks from this same chapter to maintain identical character names, terminology, and speech tone:\n");
+        for entry in same_chapter_memory.iter().take(15) {
+            prompt.push_str(&format!("* {}\n", entry));
+        }
+        prompt.push_str("\n");
+    }
+
+    if !other_chapter_memory.is_empty() {
+        prompt.push_str("--- CONTEXT FROM OTHER CHAPTERS ---\n");
+        prompt.push_str("Here is general translation context from other chapters in the same project for global terminology consistency:\n");
+        for entry in other_chapter_memory.iter().take(10) {
+            prompt.push_str(&format!("* {}\n", entry));
+        }
+        prompt.push_str("\n");
+    }
+
+    prompt.push_str("--- TRANSLATION DIRECTIVE ---\n");
+    prompt.push_str("Translate the new text blocks below. Match the naming, vocabulary, and stylistic conventions established in the context above strictly. Follow the provided structural page headers (e.g. === PAGE ... ===) to understand the sequential flow of dialogue.");
+
+    prompt
+}
+
 #[async_trait]
 impl Engine for Model {
     async fn run(&self, ctx: EngineCtx<'_>) -> Result<Vec<Op>> {
@@ -20,13 +111,22 @@ impl Engine for Model {
             return Ok(Vec::new());
         }
 
+        let target_lang = ctx.options.target_language.as_deref().unwrap_or("Vietnamese");
+        let reinforced_prompt = build_reinforced_system_prompt(
+            ctx.scene,
+            ctx.page,
+            target_lang,
+            ctx.options.system_prompt.as_deref(),
+        );
+
         let sources: Vec<String> = targets.iter().map(|(_, s)| s.clone()).collect();
         let translations = ctx
             .llm
             .translate_texts(
                 &sources,
-                ctx.options.target_language.as_deref(),
-                ctx.options.system_prompt.as_deref(),
+                Some(target_lang),
+                Some(&reinforced_prompt),
+                None,
             )
             .await?;
 
@@ -54,7 +154,7 @@ fn collect_translation_targets(ctx: &EngineCtx<'_>) -> Vec<(NodeId, String)> {
     collect_translation_targets_from(ctx.scene, ctx.page, ctx.options.text_node_ids.as_deref())
 }
 
-fn collect_translation_targets_from(
+pub fn collect_translation_targets_from(
     scene: &Scene,
     page: PageId,
     allowed_ids: Option<&[NodeId]>,
@@ -67,10 +167,14 @@ fn collect_translation_targets_from(
 }
 
 fn should_translate(id: NodeId, text_data: &TextData, allowed_ids: Option<&[NodeId]>) -> bool {
-    if let Some(ids) = allowed_ids
-        && !ids.contains(&id)
-    {
-        return false;
+    if let Some(ids) = allowed_ids {
+        if !ids.contains(&id) {
+            return false;
+        }
+    } else if let Some(ref trans) = text_data.translation {
+        if !trans.trim().is_empty() {
+            return false;
+        }
     }
     text_data
         .text
@@ -162,5 +266,39 @@ mod tests {
             collect_translation_targets_from(&scene, page_id(), options.text_node_ids.as_deref());
 
         assert!(targets.is_empty());
+    }
+
+    #[test]
+    fn should_build_reinforced_prompt_containing_translation_memory() {
+        let first = node_id(11);
+        let second = node_id(22);
+        
+        let mut node1 = text_node(first, Some("こんにちは"));
+        if let NodeKind::Text(data) = &mut node1.kind {
+            data.translation = Some("Xin chào".to_string());
+        }
+        
+        let node2 = text_node(second, Some("さようなら"));
+        
+        let mut scene = Scene::default();
+        
+        // Page 1: current page, contains node2
+        let page_id_1 = page_id();
+        let mut page1 = Page::new("page1", 100, 100);
+        page1.id = page_id_1;
+        page1.nodes.insert(node2.id, node2);
+        scene.pages.insert(page_id_1, page1);
+
+        // Page 2: other page, contains translation memory node1
+        let page_id_2 = PageId(Uuid::from_u128(2));
+        let mut page2 = Page::new("page2", 100, 100);
+        page2.id = page_id_2;
+        page2.nodes.insert(node1.id, node1);
+        scene.pages.insert(page_id_2, page2);
+        
+        let prompt = build_reinforced_system_prompt(&scene, page_id_1, "Vietnamese", None);
+        
+        assert!(prompt.contains("Original: \"こんにちは\" -> Translated: \"Xin chào\""));
+        assert!(prompt.contains("Vietnamese"));
     }
 }

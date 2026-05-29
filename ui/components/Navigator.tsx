@@ -1,16 +1,33 @@
-'use client'
-
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { LayoutGridIcon } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { LayoutGridIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { importPages } from '@/lib/io/pagesIo'
 
 import { PageManagerDialog } from '@/components/PageManagerDialog'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useScene } from '@/hooks/useScene'
 import { getGetPageThumbnailUrl } from '@/lib/api/default/default'
 import { useSelectionStore } from '@/lib/stores/selectionStore'
+import { applyOp } from '@/lib/io/scene'
+import { ops } from '@/lib/ops'
 
 const THUMBNAIL_DPR =
   typeof window !== 'undefined' ? Math.min(Math.ceil(window.devicePixelRatio || 1), 3) : 2
@@ -18,10 +35,54 @@ const THUMBNAIL_DPR =
 const ROW_HEIGHT = 230
 const OVERSCAN = 5
 
+function getNextChapterName(chapters: any[]): string {
+  if (chapters.length === 0) {
+    return "Chapter 1";
+  }
+  // Sort by order ascending to get the highest order (latest) chapter
+  const sorted = [...chapters].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const latest = sorted[sorted.length - 1];
+  if (!latest || !latest.name) {
+    return `Chapter ${chapters.length + 1}`;
+  }
+  
+  const name = latest.name;
+  // Match all numbers in the chapter name
+  const matches = name.match(/\d+/g);
+  if (matches && matches.length > 0) {
+    const lastNumStr = matches[matches.length - 1];
+    const lastNum = parseInt(lastNumStr, 10);
+    const nextNumStr = String(lastNum + 1);
+    const lastIndex = name.lastIndexOf(lastNumStr);
+    if (lastIndex !== -1) {
+      return name.substring(0, lastIndex) + nextNumStr + name.substring(lastIndex + lastNumStr.length);
+    }
+  }
+  
+  // Fallback if no digits were found in the chapter name
+  return `${name} 2`;
+}
+
 export function Navigator() {
   const { scene } = useScene()
   const pagesMap = scene?.pages
-  const pages = useMemo(() => (pagesMap ? Object.values(pagesMap) : []), [pagesMap])
+  const chapterId = useSelectionStore((s) => s.chapterId)
+  const setChapter = useSelectionStore((s) => s.setChapter)
+
+  // Fetch chapters from scene (if any)
+  const chapters = useMemo(() => {
+    const chaptersMap = (scene as any)?.chapters
+    return chaptersMap ? Object.values(chaptersMap) : []
+  }, [scene])
+
+  // Filter pages depending on selected chapterId
+  const pages = useMemo(() => {
+    if (!pagesMap) return []
+    const all = Object.values(pagesMap)
+    if (!chapterId || chapterId === 'all-chapters') return all
+    return all.filter((p: any) => p.chapterId === chapterId)
+  }, [pagesMap, chapterId])
+
   const totalPages = pages.length
   const pageId = useSelectionStore((s) => s.pageId)
   const setPage = useSelectionStore((s) => s.setPage)
@@ -29,6 +90,39 @@ export function Navigator() {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const { t } = useTranslation()
   const [pageManagerOpen, setPageManagerOpen] = useState(false)
+  const [hoveredInsertIndex, setHoveredInsertIndex] = useState<number | null>(null)
+
+  // Chapter Creation Dialog State
+  const [createOpen, setCreateOpen] = useState(false)
+  const [chapterName, setChapterName] = useState('')
+
+  // Reset chapter selection on project switch
+  const currentProjectName = scene?.project?.name;
+  const lastProjectRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (currentProjectName && currentProjectName !== lastProjectRef.current) {
+      lastProjectRef.current = currentProjectName;
+      setChapter(null);
+    }
+  }, [currentProjectName, setChapter]);
+
+  // Auto-select latest chapter on first entry
+  useEffect(() => {
+    if (scene) {
+      if (chapters.length > 0) {
+        if (chapterId === null) {
+          const sorted = [...chapters].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+          const latest = sorted[sorted.length - 1] as any;
+          if (latest && latest.id) {
+            setChapter(latest.id);
+          }
+        }
+      } else if (chapterId === null) {
+        setChapter('all-chapters');
+      }
+    }
+  }, [scene, chapters, chapterId, setChapter]);
 
   const virtualizer = useVirtualizer({
     count: totalPages,
@@ -37,12 +131,100 @@ export function Navigator() {
     overscan: OVERSCAN,
   })
 
+  const handleCreateChapter = async () => {
+    const trimmed = chapterName.trim()
+    if (!trimmed) return
+    const newId = crypto.randomUUID()
+    const newChapter = {
+      id: newId,
+      name: trimmed,
+      order: chapters.length + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pageIds: []
+    }
+
+    try {
+      await applyOp({
+        addChapter: {
+          chapter: newChapter
+        }
+      } as any)
+      setChapter(newId)
+      setChapterName('')
+      setCreateOpen(false)
+    } catch (e) {
+      console.error('Failed to create chapter:', e)
+    }
+  }
+
+  const handleOpenCreateDialog = () => {
+    const nextName = getNextChapterName(chapters)
+    setChapterName(nextName)
+    setCreateOpen(true)
+  }
+
+  const handleDeletePage = async (pageToDelete: any, index: number) => {
+    try {
+      await applyOp(ops.removePage(pageToDelete.id, pageToDelete, index))
+      if (pageId === pageToDelete.id) {
+        const remaining = pages.filter((p) => p.id !== pageToDelete.id)
+        if (remaining.length > 0) {
+          setPage(remaining[0].id)
+        } else {
+          setPage(null)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to delete page:', e)
+    }
+  }
+
+  const handleInsertPage = async (index: number) => {
+    try {
+      await importPages('append', 'files', index)
+    } catch (e) {
+      console.error('Failed to insert page:', e)
+    }
+  }
+
   return (
     <div
       data-testid='navigator-panel'
       data-total-pages={totalPages}
       className='flex h-full min-h-0 w-full flex-col bg-muted/50'
     >
+      {/* Chapter Selection Header */}
+      <div className='flex items-center gap-1.5 border-b border-border bg-card/40 px-2 py-2'>
+        <div className='flex-1'>
+          <Select
+            value={chapterId === null ? 'all-chapters' : chapterId}
+            onValueChange={(val) => setChapter(val)}
+          >
+            <SelectTrigger className='h-7 w-full border-border/80 bg-background/50 hover:bg-background/80'>
+              <SelectValue placeholder="Select Chapter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all-chapters">All Chapters</SelectItem>
+              {chapters.map((ch: any) => (
+                <SelectItem key={ch.id} value={ch.id}>
+                  {ch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant='outline'
+          size='icon'
+          className='h-7 w-7 border-border/80 bg-background/50 hover:bg-background/80'
+          onClick={handleOpenCreateDialog}
+          title="Create New Chapter"
+        >
+          <PlusIcon className='h-3.5 w-3.5' />
+        </Button>
+      </div>
+
       <div className='flex items-center justify-between border-b border-border px-2 py-1.5'>
         <div>
           <p className='text-xs tracking-wide text-muted-foreground uppercase'>
@@ -83,7 +265,7 @@ export function Navigator() {
             return (
               <div
                 key={page?.id ?? virtualRow.index}
-                className='absolute left-0 w-full px-1.5 pb-1'
+                className='absolute left-0 w-full px-1.5 pb-1 hover:z-50 transition-all duration-200'
                 style={{
                   height: ROW_HEIGHT,
                   top: 0,
@@ -93,8 +275,14 @@ export function Navigator() {
                 <PagePreview
                   index={virtualRow.index}
                   pageId={page?.id}
+                  name={page?.name}
                   selected={page?.id === pageId}
                   onSelect={() => page && setPage(page.id)}
+                  onDelete={page ? () => handleDeletePage(page, virtualRow.index) : undefined}
+                  onInsert={page ? () => handleInsertPage(virtualRow.index + 1) : undefined}
+                  onInsertBefore={page && virtualRow.index === 0 ? () => handleInsertPage(0) : undefined}
+                  hoveredInsertIndex={hoveredInsertIndex}
+                  setHoveredInsertIndex={setHoveredInsertIndex}
                 />
               </div>
             )
@@ -103,6 +291,37 @@ export function Navigator() {
       </ScrollArea>
 
       <PageManagerDialog open={pageManagerOpen} onOpenChange={setPageManagerOpen} />
+
+      {/* Chapter Creation Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Create New Chapter</DialogTitle>
+            <DialogDescription>
+              Create a new chapter to group and isolate your manga pages.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='flex flex-col gap-4 py-2'>
+            <Input
+              autoFocus
+              value={chapterName}
+              onChange={(e) => setChapterName(e.target.value)}
+              placeholder="e.g. Chapter 1: The Adventure Begins"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateChapter()
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateChapter} disabled={!chapterName.trim()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -110,37 +329,130 @@ export function Navigator() {
 type PagePreviewProps = {
   index: number
   pageId?: string
+  name?: string
   selected: boolean
   onSelect: () => void
+  onDelete?: () => void
+  onInsert?: () => void
+  onInsertBefore?: () => void
+  hoveredInsertIndex: number | null
+  setHoveredInsertIndex: (index: number | null) => void
 }
 
-function PagePreview({ index, pageId, selected, onSelect }: PagePreviewProps) {
+function PagePreview({
+  index,
+  pageId,
+  name,
+  selected,
+  onSelect,
+  onDelete,
+  onInsert,
+  onInsertBefore,
+  hoveredInsertIndex,
+  setHoveredInsertIndex,
+}: PagePreviewProps) {
   const src = pageId ? `${getGetPageThumbnailUrl(pageId)}?size=${200 * THUMBNAIL_DPR}` : undefined
 
+  const isBelowHovered = hoveredInsertIndex === index
+  const isAboveHovered = hoveredInsertIndex === index + 1
+
+  const translateClass = isBelowHovered
+    ? 'translate-y-3'
+    : isAboveHovered
+      ? '-translate-y-3'
+      : 'translate-y-0'
+
   return (
-    <Button
-      variant='ghost'
-      onClick={onSelect}
-      data-testid={`navigator-page-${index}`}
-      data-page-index={index}
-      data-selected={selected}
-      className='flex h-full w-full flex-col gap-0.5 rounded border border-transparent bg-card p-1.5 text-left shadow-sm data-[selected=true]:border-primary'
+    <div className='group/preview relative h-full w-full'>
+      {index === 0 && onInsertBefore && (
+        <InsertPageDivider
+          onClick={onInsertBefore}
+          onMouseEnter={() => setHoveredInsertIndex(0)}
+          onMouseLeave={() => setHoveredInsertIndex(null)}
+          position='top'
+        />
+      )}
+
+      {onInsert && (
+        <InsertPageDivider
+          onClick={onInsert}
+          onMouseEnter={() => setHoveredInsertIndex(index + 1)}
+          onMouseLeave={() => setHoveredInsertIndex(null)}
+        />
+      )}
+
+      <Button
+        variant='ghost'
+        onClick={onSelect}
+        data-testid={`navigator-page-${index}`}
+        data-page-index={index}
+        data-selected={selected}
+        className={`flex h-full w-full flex-col gap-0.5 rounded border border-transparent bg-card p-1.5 text-left shadow-sm data-[selected=true]:border-primary transition-transform duration-300 ease-out ${translateClass}`}
+      >
+        <div className='flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded'>
+          {src ? (
+            <img
+              src={src}
+              alt={`Page ${index + 1}`}
+              loading='lazy'
+              className='max-h-full max-w-full rounded object-contain'
+            />
+          ) : (
+            <div className='h-full w-full rounded bg-muted' />
+          )}
+        </div>
+        <div className='flex w-full shrink-0 flex-col items-center justify-center text-xs text-muted-foreground gap-0.5 px-1'>
+          <span className='font-semibold text-foreground truncate max-w-full' title={name || `Page ${index + 1}`}>
+            {index + 1}. {name || `Page ${index + 1}`}
+          </span>
+        </div>
+      </Button>
+      {onDelete && (
+        <Button
+          variant='destructive'
+          size='icon'
+          className={`absolute top-1 right-1 h-6 w-6 scale-90 opacity-0 transition-all duration-200 group-hover/preview:scale-100 group-hover/preview:opacity-100 shadow-md cursor-pointer border-none transition-transform duration-300 ${translateClass}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          title="Delete Page"
+        >
+          <Trash2Icon className='h-3 w-3' />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+type InsertPageDividerProps = {
+  onClick: () => void
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+  position?: 'top' | 'bottom'
+}
+
+function InsertPageDivider({ onClick, onMouseEnter, onMouseLeave, position = 'bottom' }: InsertPageDividerProps) {
+  const positionClass = position === 'top' ? 'top-0 -translate-y-1/2' : 'bottom-0 translate-y-1/2'
+  return (
+    <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className={`peer/insert absolute left-0 right-0 h-6 flex items-center justify-center z-30 group/insert opacity-0 hover:opacity-100 transition-opacity duration-300 ${positionClass}`}
     >
-      <div className='flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded'>
-        {src ? (
-          <img
-            src={src}
-            alt={`Page ${index + 1}`}
-            loading='lazy'
-            className='max-h-full max-w-full rounded object-contain'
-          />
-        ) : (
-          <div className='h-full w-full rounded bg-muted' />
-        )}
-      </div>
-      <div className='flex shrink-0 items-center text-xs text-muted-foreground'>
-        <div className='mx-auto font-semibold text-foreground'>{index + 1}</div>
-      </div>
-    </Button>
+      <div className='w-full h-[2px] bg-primary scale-x-0 group-hover/insert:scale-x-100 transition-transform duration-300 origin-center ease-out' />
+      <Button
+        variant='secondary'
+        size='icon'
+        className='absolute h-6 w-6 rounded-full shadow-md cursor-pointer border-none bg-primary text-primary-foreground hover:bg-primary/95 flex items-center justify-center scale-0 group-hover/insert:scale-100 transition-transform duration-300 cubic-bezier(0.34, 1.56, 0.64, 1)'
+        onClick={(e) => {
+          e.stopPropagation()
+          onClick()
+        }}
+        title={position === 'top' ? "Insert Page Before" : "Insert Page After"}
+      >
+        <PlusIcon className='h-3.5 w-3.5' />
+      </Button>
+    </div>
   )
 }

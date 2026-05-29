@@ -13,12 +13,9 @@
 //!     --output-dir out/
 //! ```
 //!
-//! By default the LLM translate step is skipped (it would need a local
-//! model loaded). When translate is skipped we copy OCR text into the
-//! translation slot so the renderer still has something to rasterise.
-//!
-//! To run the translate step end-to-end, preload a local model:
-//! `--with-translate --llm <modelId> --target-lang en`.
+//! The one-shot CLI skips the LLM translate step because local language models
+//! are not exposed by the app. When translate is skipped we copy OCR text into
+//! the translation slot so the renderer still has something to rasterise.
 //!
 //! ## Output files
 //!
@@ -63,12 +60,12 @@ struct Cli {
 
     /// Override the pipeline step list (comma-separated engine ids).
     /// When omitted we run the engines named in `config.pipeline.*`,
-    /// skipping translate unless `--with-translate` is passed.
+    /// skipping translate.
     #[arg(long, value_name = "IDS", value_delimiter = ',')]
     steps: Option<Vec<String>>,
 
     /// Target language for the translator engine (ignored when translate is skipped).
-    #[arg(long, default_value = "en")]
+    #[arg(long, default_value = "vi-VN")]
     target_lang: String,
 
     /// Custom system prompt for the translator.
@@ -79,15 +76,10 @@ struct Cli {
     #[arg(long)]
     default_font: Option<String>,
 
-    /// Include the llm-translate step. Requires `--llm <id>` to pre-load a
-    /// local model, or for the currently-registered translator to accept
-    /// provider-backed requests.
+    /// Include the llm-translate step. Local language models are disabled, so
+    /// this is currently unsupported by the one-shot CLI.
     #[arg(long)]
     with_translate: bool,
-
-    /// Pre-load a local LLM before the pipeline runs (e.g. `lfm2.5-1.2b-instruct`).
-    #[arg(long, value_name = "MODEL_ID")]
-    llm: Option<String>,
 
     /// Force CPU-only compute.
     #[arg(long)]
@@ -160,27 +152,10 @@ async fn run() -> Result<()> {
     app.spawn_download_forwarder();
     app.spawn_llm_forwarder();
 
-    // Optional LLM preload so the translate step can reach the model.
-    if let Some(model_id) = cli.llm.as_deref() {
-        eprintln!("=> loading LLM `{model_id}`");
-        app.llm
-            .load_from_request(
-                koharu_core::LlmLoadRequest {
-                    target: koharu_core::LlmTarget {
-                        kind: koharu_core::LlmTargetKind::Local,
-                        model_id: model_id.to_string(),
-                        provider_id: None,
-                    },
-                    options: None,
-                },
-                None,
-            )
-            .await
-            .with_context(|| format!("load local llm `{model_id}`"))?;
-        // `load_local` is fire-and-forget; poll until it reports Ready.
-        wait_for_llm_ready(&app).await?;
-    } else if cli.with_translate {
-        anyhow::bail!("--with-translate requires --llm <modelId>");
+    if cli.with_translate {
+        anyhow::bail!(
+            "--with-translate is unsupported in the one-shot CLI because local language models are disabled"
+        );
     }
 
     // Project session + source image.
@@ -293,22 +268,6 @@ fn load_config(path: Option<&std::path::Path>) -> Result<AppConfig> {
     }
 }
 
-/// Poll the LLM state every 200 ms until it's ready or fails. Local GGUF
-/// loads are seconds to minutes depending on size — this avoids racing the
-/// pipeline against a still-loading model.
-async fn wait_for_llm_ready(app: &App) -> Result<()> {
-    loop {
-        let snap = app.llm.snapshot().await;
-        match snap.status {
-            koharu_core::LlmStateStatus::Ready => return Ok(()),
-            koharu_core::LlmStateStatus::Failed => {
-                anyhow::bail!("llm load failed");
-            }
-            _ => tokio::time::sleep(std::time::Duration::from_millis(200)).await,
-        }
-    }
-}
-
 /// Import the source image as a new page + `Image { Source }` node. Mirrors
 /// the `POST /pages` handler, minus the multipart plumbing.
 fn import_page(app: &App, input: &std::path::Path) -> Result<PageId> {
@@ -354,7 +313,7 @@ fn import_page(app: &App, input: &std::path::Path) -> Result<PageId> {
 /// Compose the step list. Order preference:
 /// 1. `--steps a,b,c` — literal, in user-supplied order.
 /// 2. Else: engines named in `config.pipeline.*` in the canonical order,
-///    with `translator` included only when `--with-translate`.
+///    with `translator` omitted by default.
 fn resolve_steps(cli: &Cli, cfg: &AppConfig) -> Result<Vec<String>> {
     if let Some(s) = cli.steps.clone() {
         return Ok(s.into_iter().filter(|s| !s.is_empty()).collect());
@@ -371,9 +330,6 @@ fn resolve_steps(cli: &Cli, cfg: &AppConfig) -> Result<Vec<String>> {
     push(&mut steps, &p.bubble_segmenter);
     push(&mut steps, &p.font_detector);
     push(&mut steps, &p.ocr);
-    if cli.with_translate {
-        push(&mut steps, &p.translator);
-    }
     push(&mut steps, &p.inpainter);
     push(&mut steps, &p.renderer);
     Ok(steps)

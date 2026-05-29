@@ -16,6 +16,7 @@ import { Workspace, StatusBar } from '@/components/Canvas'
 import { Navigator } from '@/components/Navigator'
 import { Panels } from '@/components/Panels'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
+import { WebtoonPreviewDialog } from '@/components/WebtoonPreviewDialog'
 import { useScene } from '@/hooks/useScene'
 import { useGetMeta } from '@/lib/api/default/default'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
@@ -65,6 +66,7 @@ export default function Page() {
   return (
     <div className='flex min-h-0 flex-1 flex-col'>
       <ActivityBubble />
+      <WebtoonPreviewDialog />
       <Group
         orientation='horizontal'
         id={LAYOUT_ID}
