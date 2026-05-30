@@ -6,7 +6,10 @@
     "copy": "Sao chép",
     "copied": "Đã sao chép",
     "save": "Lưu",
-    "saved": "Đã lưu!"
+    "saved": "Đã lưu!",
+    "delete": "Xóa",
+    "close": "Đóng",
+    "error": "Lỗi"
   },
   "menu": {
     "file": "Tệp",
@@ -54,7 +57,8 @@
       "ko-KR": "Tiếng Hàn",
       "pt-BR": "Tiếng Bồ Đào Nha Brazil",
       "vi-VN": "Tiếng Việt"
-    }
+    },
+    "exportAllPsd": "Xuất tất cả PSD..."
   },
   "welcome": {
     "title": "Koharu",
@@ -68,7 +72,22 @@
     "newDialogTitle": "Dự án mới",
     "newDialogDescription": "Đặt tên cho dự án. Dự án sẽ được lưu trong thư mục dự án do ứng dụng quản lý.",
     "newDialogPlaceholder": "Tên dự án",
-    "newDialogSubmit": "Tạo"
+    "newDialogSubmit": "Tạo",
+    "searchProjects": "Tìm kiếm dự án...",
+    "downloadFromWeb": "Tải từ mạng",
+    "noMatchingProjects": "Không tìm thấy dự án phù hợp",
+    "deleteProjectTitle": "Xóa dự án",
+    "deleteProjectConfirm": "Bạn có chắc muốn xóa dự án này? Tất cả dữ liệu scene, layer, ảnh và bản dịch sẽ bị xóa vĩnh viễn. Thao tác này không thể hoàn tác.",
+    "deleteProjectForever": "Xóa vĩnh viễn",
+    "newProjectSubtitle": "Tạo dự án mới hoặc nhập tệp để bắt đầu",
+    "openProject": "Mở dự án",
+    "deleteProject": "Xóa dự án",
+    "time": {
+      "justNow": "vừa xong",
+      "minutes": "{{count}} phút trước",
+      "hours": "{{count}} giờ trước",
+      "days": "{{count}} ngày trước"
+    }
   },
   "operations": {
     "title": "Đang làm việc",
@@ -96,7 +115,15 @@
     "pageManager": {
       "title": "Quản lý trang",
       "description": "Kéo thả trang để sắp xếp lại."
-    }
+    },
+    "invalidChapterId": "Lỗi: Mã chapterId không hợp lệ: {{chapterId}}",
+    "targetChapterNotFound": "Lỗi: Không tìm thấy targetChapter cho chapterId: {{chapterId}}. Danh sách key có sẵn: {{keys}}",
+    "prevIndexNotFound": "Lỗi: Không tìm thấy vị trí chapter (prevIndex) cho chapterId: {{chapterId}}",
+    "deleteChapterTitle": "Xóa Chapter",
+    "deleteChapterConfirm": "Bạn có chắc chắn muốn xóa chapter này? Tất cả các trang thuộc chapter này cũng sẽ bị xóa vĩnh viễn khỏi dự án. Thao tác này không thể hoàn tác trực tiếp nhưng bạn có thể Undo (Ctrl+Z) nếu muốn khôi phục.",
+    "deleteChapterOp": "Xóa Chapter {{name}}",
+    "deleteChapterRequestError": "Lỗi khi gửi yêu cầu xóa chapter lên máy chủ: {{message}}",
+    "deleteForever": "Xóa Vĩnh Viễn"
   },
   "panels": {
     "processing": "Xử lý",
@@ -266,7 +293,8 @@
     "readingOrder": "Thứ tự đọc",
     "readingOrderRtl": "Phải sang trái (RTL)",
     "readingOrderLtr": "Trái sang phải (LTR)",
-    "readingOrderCustom": "Tùy chỉnh"
+    "readingOrderCustom": "Tùy chỉnh",
+    "clearText": "Xóa nội dung"
   },
   "workspace": {
     "importPrompt": "Nhập một trang để bắt đầu chỉnh sửa.",
@@ -451,5 +479,73 @@
     },
     "close": "Đóng",
     "retry": "Thử lại"
+  },
+  "haruneko": {
+    "syncTitle": "Đồng bộ Scripts HaruNeko",
+    "syncDescription": "Tải xuống và cài đặt toàn bộ các website connector scrapers từ kho HaruNeko vào thư mục hệ thống Koharu.",
+    "syncFailed": "Đồng bộ thất bại.",
+    "syncConnectionError": "Lỗi kết nối với backend hoặc tiến trình đồng bộ gặp lỗi.",
+    "autoSyncTitle": "Đồng bộ Nguồn Truyện Tự Động",
+    "autoSyncDescription": "Koharu sẽ thực hiện Git clone nông tự động và thiết lập các website download scrapers từ HaruNeko trực tiếp vào thư mục dữ liệu ứng dụng của hệ thống để tích hợp sử dụng nhanh chóng.",
+    "startSync": "Bắt đầu Đồng bộ & Cài đặt",
+    "syncing": "Đang tải và đồng bộ các scripts...",
+    "syncingDescription": "Vui lòng giữ kết nối internet ổn định. Koharu đang tải các scraper files và tích hợp chúng vào hệ thống.",
+    "syncComplete": "Đồng bộ hoàn tất!",
+    "syncSuccessMessage": "Đã cài đặt {{count}} scripts thành công vào hệ thống Koharu.",
+    "searchScrapers": "Tìm kiếm các website hỗ trợ...",
+    "noScrapersFound": "Không tìm thấy file nào khớp với từ khóa."
+  },
+  "downloadChapter": {
+    "newChapter": "Chapter mới",
+    "downloadFailed": "Tải chapter thất bại. Vui lòng thử lại.",
+    "downloadFromLinkFailed": "Tải chapter từ link thất bại. Vui lòng thử lại.",
+    "title": "Tải Chapter từ Web",
+    "pasteLinkLabel": "Dán link chương để tải nhanh",
+    "pasteLinkPlaceholder": "Dán link chapter (ví dụ: https://nettruyen...)",
+    "paste": "Dán",
+    "loading": "Đang tải...",
+    "download": "Tải",
+    "fetchingOnlineChapters": "Đang tải danh sách chapter trực tuyến...",
+    "downloaded": "Đã tải",
+    "downloading": "Đang tải...",
+    "downloadBtn": "Tải về",
+    "noSourceLinkedTitle": "Dự án chưa liên kết nguồn",
+    "noSourceLinkedDesc": "Dự án này được tạo thủ công nên không thể lấy danh sách chapter tự động. Bạn hãy dán link chapter ở trên để tải trực tiếp nhé!",
+    "noChaptersFoundTitle": "Không tìm thấy chapter nào",
+    "noChaptersFoundDesc": "Nguồn truyện này hiện chưa cập nhật chapter nào hoặc ngôn ngữ bạn chọn không khả dụng. Bạn vẫn có thể dán link chapter ở trên để tải trực tiếp!"
+  },
+  "downloadSource": {
+    "createProjectFailed": "Không thể tạo project từ manga này.",
+    "selectSource": "Chọn nguồn tải truyện",
+    "searchOn": "Tìm kiếm trên {{source}}",
+    "selectSourceDesc": "Chọn một trong các nguồn trực tuyến được hỗ trợ để tìm kiếm và tạo dự án.",
+    "searchOnDesc": "Nhập tên truyện cần tìm trên {{source}}.",
+    "loadingSources": "Đang tải danh sách nguồn truyện...",
+    "searchPlaceholder": "Tìm kiếm nguồn hoặc dán link truyện vào đây...",
+    "pasteLink": "Dán link",
+    "noSourcesFoundTitle": "Không tìm thấy nguồn truyện nào",
+    "noSourcesFoundDesc": "Thử lại bằng từ khóa khác hoặc đảm bảo bạn đã đồng bộ các script tải từ HaruNeko.",
+    "searchMangaPlaceholder": "Nhập tên manga hoặc dán link truyện để tìm...",
+    "paste": "Dán",
+    "projectPath": "Thư mục lưu dự án",
+    "defaultPath": "Mặc định (Thư mục dự án của Koharu)",
+    "change": "Thay đổi...",
+    "mangaSearchHint": "Nhập từ khóa tìm kiếm để bắt đầu tra cứu truyện tranh trực tuyến từ {{source}}.",
+    "searching": "Đang tìm kiếm...",
+    "noDescription": "Không có mô tả.",
+    "creating": "Đang tạo...",
+    "createProject": "Tạo Project",
+    "noResultsTitle": "Không tìm thấy kết quả nào",
+    "noResultsDesc": "Vui lòng thử lại với từ khóa khác hoặc kiểm tra lại kết nối mạng."
+  },
+  "canvas": {
+    "toolbar": {
+      "translationTool": "Công cụ dịch",
+      "retranslate": "Dịch lại",
+      "pageLabel": "Trang",
+      "chapterLabel": "Chapter"
+    },
+    "showRenderedImage": "Bản dịch",
+    "showInpaintedImage": "Ảnh gốc"
   }
 }

@@ -6,7 +6,10 @@
     "copy": "Copy",
     "copied": "Copied",
     "save": "Save",
-    "saved": "Saved!"
+    "saved": "Saved!",
+    "delete": "Delete",
+    "close": "Close",
+    "error": "Error"
   },
   "menu": {
     "file": "File",
@@ -53,7 +56,8 @@
       "tr-TR": "Türkçe",
       "ko-KR": "한국어",
       "pt-BR": "Português brasileiro"
-    }
+    },
+    "exportAllPsd": "Export all PSDs..."
   },
   "welcome": {
     "title": "Koharu",
@@ -67,7 +71,22 @@
     "newDialogTitle": "New project",
     "newDialogDescription": "Give your project a name. It will be stored under the managed projects directory.",
     "newDialogPlaceholder": "Project name",
-    "newDialogSubmit": "Create"
+    "newDialogSubmit": "Create",
+    "searchProjects": "Search projects...",
+    "downloadFromWeb": "Download from Web",
+    "noMatchingProjects": "No matching projects found",
+    "deleteProjectTitle": "Delete Project",
+    "deleteProjectConfirm": "Are you sure you want to delete this project? All scene, layer, image, and translation data will be permanently deleted. This action cannot be undone.",
+    "deleteProjectForever": "Delete permanently",
+    "newProjectSubtitle": "Create a new project or import files to begin",
+    "openProject": "Open Project",
+    "deleteProject": "Delete Project",
+    "time": {
+      "justNow": "just now",
+      "minutes": "{{count}}m ago",
+      "hours": "{{count}}h ago",
+      "days": "{{count}}d ago"
+    }
   },
   "operations": {
     "title": "Working",
@@ -95,7 +114,15 @@
     "pageManager": {
       "title": "Page Manager",
       "description": "Drag and drop pages to reorder them."
-    }
+    },
+    "invalidChapterId": "Error: Invalid chapterId: {{chapterId}}",
+    "targetChapterNotFound": "Error: targetChapter not found for chapterId: {{chapterId}}. Available keys: {{keys}}",
+    "prevIndexNotFound": "Error: Chapter position (prevIndex) not found for chapterId: {{chapterId}}",
+    "deleteChapterTitle": "Delete Chapter",
+    "deleteChapterConfirm": "Are you sure you want to delete this chapter? All pages in this chapter will also be permanently deleted. This action cannot be directly undone, but you can Undo (Ctrl+Z) to restore.",
+    "deleteChapterOp": "Delete Chapter {{name}}",
+    "deleteChapterRequestError": "Error sending delete chapter request to server: {{message}}",
+    "deleteForever": "Delete Permanently"
   },
   "panels": {
     "processing": "Processing",
@@ -265,7 +292,8 @@
     "readingOrder": "Reading Order",
     "readingOrderRtl": "Right-to-Left (RTL)",
     "readingOrderLtr": "Left-to-Right (LTR)",
-    "readingOrderCustom": "Custom"
+    "readingOrderCustom": "Custom",
+    "clearText": "Clear text"
   },
   "workspace": {
     "importPrompt": "Import a page to begin editing.",
@@ -450,5 +478,73 @@
     },
     "close": "Close",
     "retry": "Retry"
+  },
+  "haruneko": {
+    "syncTitle": "Sync HaruNeko Scripts",
+    "syncDescription": "Download and install all website connector scrapers from the HaruNeko repository into the Koharu system directory.",
+    "syncFailed": "Sync failed.",
+    "syncConnectionError": "Connection error with backend or sync process failed.",
+    "autoSyncTitle": "Automatic Source Sync",
+    "autoSyncDescription": "Koharu will perform an automatic shallow Git clone and set up website download scrapers from HaruNeko directly in the system application data folder for quick integration.",
+    "startSync": "Start Sync & Install",
+    "syncing": "Downloading and syncing scripts...",
+    "syncingDescription": "Please maintain a stable internet connection. Koharu is downloading scraper files and integrating them into the system.",
+    "syncComplete": "Sync complete!",
+    "syncSuccessMessage": "Successfully installed {{count}} scripts into the Koharu system.",
+    "searchScrapers": "Search supported websites...",
+    "noScrapersFound": "No files found matching the keyword."
+  },
+  "downloadChapter": {
+    "newChapter": "New Chapter",
+    "downloadFailed": "Failed to download chapter. Please try again.",
+    "downloadFromLinkFailed": "Failed to download chapter from link. Please try again.",
+    "title": "Download Chapter from Web",
+    "pasteLinkLabel": "Paste chapter link to download quickly",
+    "pasteLinkPlaceholder": "Paste chapter link (e.g., https://nettruyen...)",
+    "paste": "Paste",
+    "loading": "Loading...",
+    "download": "Download",
+    "fetchingOnlineChapters": "Fetching online chapters...",
+    "downloaded": "Downloaded",
+    "downloading": "Downloading...",
+    "downloadBtn": "Download",
+    "noSourceLinkedTitle": "Project has no linked source",
+    "noSourceLinkedDesc": "This project was created manually and cannot fetch chapters automatically. Please paste a chapter link above to download directly!",
+    "noChaptersFoundTitle": "No chapters found",
+    "noChaptersFoundDesc": "This source has no chapters available or the selected language is not available. You can still paste a chapter link above to download directly!"
+  },
+  "downloadSource": {
+    "createProjectFailed": "Failed to create project from this manga.",
+    "selectSource": "Select download source",
+    "searchOn": "Search on {{source}}",
+    "selectSourceDesc": "Select one of the supported online sources to search and create a project.",
+    "searchOnDesc": "Enter manga name to search on {{source}}.",
+    "loadingSources": "Loading download sources...",
+    "searchPlaceholder": "Search sources or paste manga link here...",
+    "pasteLink": "Paste link",
+    "noSourcesFoundTitle": "No download sources found",
+    "noSourcesFoundDesc": "Try another keyword or ensure you have synced HaruNeko scripts.",
+    "searchMangaPlaceholder": "Enter manga name or paste manga link to search...",
+    "paste": "Paste",
+    "projectPath": "Project destination path",
+    "defaultPath": "Default (Koharu's project directory)",
+    "change": "Change...",
+    "mangaSearchHint": "Enter keywords to start searching online manga from {{source}}.",
+    "searching": "Searching...",
+    "noDescription": "No description.",
+    "creating": "Creating...",
+    "createProject": "Create Project",
+    "noResultsTitle": "No results found",
+    "noResultsDesc": "Please try again with a different keyword or check your network connection."
+  },
+  "canvas": {
+    "toolbar": {
+      "translationTool": "Translation Tool",
+      "retranslate": "Retranslate",
+      "pageLabel": "Page",
+      "chapterLabel": "Chapter"
+    },
+    "showRenderedImage": "Rendered Image",
+    "showInpaintedImage": "Original Image"
   }
 }

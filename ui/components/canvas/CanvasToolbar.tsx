@@ -89,6 +89,7 @@ export function CanvasToolbar() {
         <BookOpenIcon className='size-3.5' />
         Webtoon Preview
       </Button>
+      <TranslationToolPopover />
       <LlmStatusPopover />
     </div>
   )
@@ -327,9 +328,124 @@ function LlmStatusPopover() {
     })
   }, [llmModels, llmSelectedLanguage, selectedModel?.model, selectedTarget])
   const indicatorBusy = busy || llmLoading
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <PopoverTrigger asChild>
+        <button
+          data-testid='llm-trigger'
+          data-llm-ready={llmReady ? 'true' : 'false'}
+          data-llm-loading={indicatorBusy ? 'true' : 'false'}
+          className={`flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium shadow-sm transition hover:opacity-80 ${
+            llmReady
+              ? 'bg-rose-400 text-white ring-1 ring-rose-400/30'
+              : indicatorBusy
+                ? 'bg-amber-400 text-white ring-1 ring-amber-400/30'
+                : 'bg-muted text-muted-foreground ring-1 ring-border/50'
+          }`}
+        >
+          <motion.span
+            className={`size-1.5 rounded-full ${
+              llmReady ? 'bg-white' : indicatorBusy ? 'bg-white' : 'bg-muted-foreground/40'
+            }`}
+            animate={
+              llmReady
+                ? { opacity: [1, 0.5, 1] }
+                : indicatorBusy
+                  ? { opacity: [1, 0.4, 1] }
+                  : { opacity: 1 }
+            }
+            transition={
+              llmReady || indicatorBusy
+                ? { duration: indicatorBusy ? 1 : 2, repeat: Infinity, ease: 'easeInOut' }
+                : {}
+            }
+          />
+          LLM
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align='end' className='w-[280px] p-0' data-testid='llm-popover'>
+        <div className='flex flex-col gap-1.5 px-3 pt-3 pb-2.5'>
+          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
+            {t('llm.model')}
+          </span>
+          <div className='flex items-center gap-1.5'>
+            <LlmModelSelect
+              data-testid='llm-model-select'
+              value={selectedTargetKey}
+              options={llmModels}
+              getKey={({ model }) => llmTargetKey(model.target)}
+              placeholder={t('llm.selectPlaceholder')}
+              onChange={handleSetSelectedModel}
+              triggerClassName='min-w-0 flex-1'
+            />
+            <Button
+              data-testid='llm-load-toggle'
+              data-llm-ready={selectedIsLoaded ? 'true' : 'false'}
+              data-llm-loading={indicatorBusy ? 'true' : 'false'}
+              variant={selectedIsLoaded ? 'ghost' : 'default'}
+              size='sm'
+              onClick={() => void handleToggleLoadUnload()}
+              disabled={!selectedTarget || indicatorBusy}
+              className='h-6 shrink-0 gap-1 px-2 text-[11px]'
+            >
+              {indicatorBusy ? <LoaderCircleIcon className='size-3 animate-spin' /> : null}
+              {selectedIsLoaded ? t('llm.unload') : t('llm.load')}
+            </Button>
+          </div>
+        </div>
+        <div className='px-3'>
+          <Separator />
+        </div>
+        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-2'>
+          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
+            {t('llm.translationSettings')}
+          </span>
+          <div className='flex flex-col gap-1.5'>
+            {selectedModelLanguages.length > 0 ? (
+              <Select
+                value={llmSelectedLanguage ?? selectedModelLanguages[0]}
+                onValueChange={handleSetSelectedLanguage}
+              >
+                <SelectTrigger data-testid='llm-language-select' className='w-full'>
+                  <SelectValue placeholder={t('llm.languagePlaceholder')} />
+                </SelectTrigger>
+                <SelectContent position='popper'>
+                  {selectedModelLanguages.map((language, index) => (
+                    <SelectItem
+                      key={language}
+                      value={language}
+                      data-testid={`llm-language-option-${index}`}
+                    >
+                      {t(`llm.languages.${language}`, { defaultValue: language })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <Textarea
+              data-testid='llm-system-prompt'
+              value={customSystemPrompt ?? ''}
+              onChange={(e) => setCustomSystemPrompt(e.target.value || undefined)}
+              placeholder={t('llm.systemPromptPlaceholder')}
+              rows={3}
+              className='min-h-0 resize-y px-2 py-1.5 text-xs leading-snug md:text-xs'
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TranslationToolPopover() {
+  const { t } = useTranslation()
   const pageId = useSelectionStore((s) => s.pageId)
   const { scene } = useScene()
   const isProcessing = useIsProcessing()
+  const { data: llmState } = useGetCurrentLlm()
+  const llmReady = llmState?.status === 'ready'
+  const [popoverOpen, setPopoverOpen] = useState(false)
 
   const handleClearPage = async () => {
     if (!pageId || !scene) return
@@ -439,116 +555,21 @@ function LlmStatusPopover() {
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <PopoverTrigger asChild>
         <button
-          data-testid='llm-trigger'
-          data-llm-ready={llmReady ? 'true' : 'false'}
-          data-llm-loading={indicatorBusy ? 'true' : 'false'}
-          className={`flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium shadow-sm transition hover:opacity-80 ${
-            llmReady
-              ? 'bg-rose-400 text-white ring-1 ring-rose-400/30'
-              : indicatorBusy
-                ? 'bg-amber-400 text-white ring-1 ring-amber-400/30'
-                : 'bg-muted text-muted-foreground ring-1 ring-border/50'
-          }`}
+          data-testid='translation-tool-trigger'
+          className='flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium shadow-sm bg-muted text-muted-foreground ring-1 ring-border/50 transition hover:opacity-80'
         >
-          <motion.span
-            className={`size-1.5 rounded-full ${
-              llmReady ? 'bg-white' : indicatorBusy ? 'bg-white' : 'bg-muted-foreground/40'
-            }`}
-            animate={
-              llmReady
-                ? { opacity: [1, 0.5, 1] }
-                : indicatorBusy
-                  ? { opacity: [1, 0.4, 1] }
-                  : { opacity: 1 }
-            }
-            transition={
-              llmReady || indicatorBusy
-                ? { duration: indicatorBusy ? 1 : 2, repeat: Infinity, ease: 'easeInOut' }
-                : {}
-            }
-          />
-          LLM
+          <LanguagesIcon className='size-3.5' />
+          {t('canvas.toolbar.translationTool')}
         </button>
       </PopoverTrigger>
-      <PopoverContent align='end' className='w-[280px] p-0' data-testid='llm-popover'>
-        <div className='flex flex-col gap-1.5 px-3 pt-3 pb-2.5'>
-          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
-            {t('llm.model')}
-          </span>
-          <div className='flex items-center gap-1.5'>
-            <LlmModelSelect
-              data-testid='llm-model-select'
-              value={selectedTargetKey}
-              options={llmModels}
-              getKey={({ model }) => llmTargetKey(model.target)}
-              placeholder={t('llm.selectPlaceholder')}
-              onChange={handleSetSelectedModel}
-              triggerClassName='min-w-0 flex-1'
-            />
-            <Button
-              data-testid='llm-load-toggle'
-              data-llm-ready={selectedIsLoaded ? 'true' : 'false'}
-              data-llm-loading={indicatorBusy ? 'true' : 'false'}
-              variant={selectedIsLoaded ? 'ghost' : 'default'}
-              size='sm'
-              onClick={() => void handleToggleLoadUnload()}
-              disabled={!selectedTarget || indicatorBusy}
-              className='h-6 shrink-0 gap-1 px-2 text-[11px]'
-            >
-              {indicatorBusy ? <LoaderCircleIcon className='size-3 animate-spin' /> : null}
-              {selectedIsLoaded ? t('llm.unload') : t('llm.load')}
-            </Button>
-          </div>
-        </div>
-        <div className='px-3'>
-          <Separator />
-        </div>
-        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-2'>
-          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
-            {t('llm.translationSettings')}
-          </span>
-          <div className='flex flex-col gap-1.5'>
-            {selectedModelLanguages.length > 0 ? (
-              <Select
-                value={llmSelectedLanguage ?? selectedModelLanguages[0]}
-                onValueChange={handleSetSelectedLanguage}
-              >
-                <SelectTrigger data-testid='llm-language-select' className='w-full'>
-                  <SelectValue placeholder={t('llm.languagePlaceholder')} />
-                </SelectTrigger>
-                <SelectContent position='popper'>
-                  {selectedModelLanguages.map((language, index) => (
-                    <SelectItem
-                      key={language}
-                      value={language}
-                      data-testid={`llm-language-option-${index}`}
-                    >
-                      {t(`llm.languages.${language}`, { defaultValue: language })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Textarea
-              data-testid='llm-system-prompt'
-              value={customSystemPrompt ?? ''}
-              onChange={(e) => setCustomSystemPrompt(e.target.value || undefined)}
-              placeholder={t('llm.systemPromptPlaceholder')}
-              rows={3}
-              className='min-h-0 resize-y px-2 py-1.5 text-xs leading-snug md:text-xs'
-            />
-          </div>
-        </div>
-        <div className='px-3'>
-          <Separator />
-        </div>
+      <PopoverContent align='end' className='w-[280px] p-0' data-testid='translation-tool-popover'>
         <div className='flex flex-col gap-1.5 px-3 pt-2 pb-3 bg-muted/20'>
           <span className='text-[10px] font-medium text-muted-foreground uppercase'>
-            Công cụ dịch
+            {t('canvas.toolbar.translationTool')}
           </span>
           <div className='flex flex-col gap-2'>
             <div className='flex items-center gap-1.5'>
-              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>Trang / Page:</span>
+              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>{t('canvas.toolbar.pageLabel')}:</span>
               <Button
                 variant='outline'
                 size='xs'
@@ -556,7 +577,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || isProcessing}
                 onClick={handleClearPage}
               >
-                Xóa
+                {t('common.delete')}
               </Button>
               <Button
                 variant='default'
@@ -565,11 +586,11 @@ function LlmStatusPopover() {
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslatePage}
               >
-                Dịch lại
+                {t('canvas.toolbar.retranslate')}
               </Button>
             </div>
             <div className='flex items-center gap-1.5'>
-              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>Chapter:</span>
+              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>{t('canvas.toolbar.chapterLabel')}:</span>
               <Button
                 variant='outline'
                 size='xs'
@@ -577,7 +598,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || isProcessing}
                 onClick={handleClearChapter}
               >
-                Xóa
+                {t('common.delete')}
               </Button>
               <Button
                 variant='default'
@@ -586,7 +607,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslateChapter}
               >
-                Dịch lại
+                {t('canvas.toolbar.retranslate')}
               </Button>
             </div>
           </div>

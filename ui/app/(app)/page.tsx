@@ -64,7 +64,7 @@ export default function Page() {
   }
 
   return (
-    <div className='flex min-h-0 flex-1 flex-col'>
+    <div className='flex min-h-0 flex-1 flex-col p-1.5 bg-[#f6f6f8] dark:bg-[#131313] gap-1.5 transition-all duration-300'>
       <ActivityBubble />
       <WebtoonPreviewDialog />
       <Group
@@ -89,27 +89,32 @@ export default function Page() {
               setShowNavigator(true)
             }
           }}
+          className='flex flex-col h-full min-h-0'
         >
-          <Navigator />
+          <div className='h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm flex flex-col transition-all duration-300'>
+            <Navigator />
+          </div>
         </Panel>
         <Separator
           className={cn(
-            'w-px bg-border transition-colors hover:bg-border',
+            'w-1 bg-transparent hover:bg-primary/10 cursor-col-resize transition-all duration-200 flex items-center justify-center group',
             !showNavigator && 'hidden',
           )}
         />
-        <Panel id='center' minSize={480}>
+        <Panel id='center' minSize={480} className='flex flex-col h-full min-h-0'>
           <AppErrorBoundary>
-            <div className='flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
+            <div className='flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-300'>
               <Workspace />
               <StatusBar />
             </div>
           </AppErrorBoundary>
         </Panel>
-        <Separator className='w-px bg-border transition-colors hover:bg-border' />
-        <Panel id='right' defaultSize={280} minSize={280} maxSize={400}>
+        <Separator className='w-1 bg-transparent hover:bg-primary/10 cursor-col-resize transition-all duration-200 flex items-center justify-center group' />
+        <Panel id='right' defaultSize={280} minSize={280} maxSize={400} className='flex flex-col h-full min-h-0'>
           <AppErrorBoundary>
-            <Panels />
+            <div className='h-full overflow-hidden rounded-xl border border-border bg-card shadow-sm flex flex-col transition-all duration-300'>
+              <Panels />
+            </div>
           </AppErrorBoundary>
         </Panel>
       </Group>

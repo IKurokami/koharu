@@ -23,7 +23,7 @@ export function Panels() {
   }, [codexSignedIn, workTab])
 
   return (
-    <div className='flex h-full min-h-0 w-full flex-col border-l bg-muted/50'>
+    <div className='flex h-full min-h-0 w-full flex-col bg-transparent'>
       <Tabs
         defaultValue='layers'
         className='h-60 shrink-0 gap-0 border-b border-border'

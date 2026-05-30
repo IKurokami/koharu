@@ -173,7 +173,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
       onOpenChange(false)
     } catch (e) {
       console.error(e)
-      setError(e instanceof Error ? e.message : 'Không thể tạo project từ manga này.')
+      setError(e instanceof Error ? e.message : t('downloadSource.createProjectFailed'))
     } finally {
       setCreatingId(null)
     }
@@ -198,12 +198,12 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
             <div>
               <DialogTitle className="text-xl font-semibold tracking-tight text-foreground flex items-center gap-2">
                 <GlobeIcon className="h-5 w-5 text-primary shrink-0" />
-                {step === 'source' ? 'Chọn nguồn tải truyện' : `Tìm kiếm trên ${selectedSource?.name}`}
+                {step === 'source' ? t('downloadSource.selectSource') : t('downloadSource.searchOn', { source: selectedSource?.name })}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
                 {step === 'source' 
-                  ? 'Chọn một trong các nguồn trực tuyến được hỗ trợ để tìm kiếm và tạo dự án.'
-                  : `Nhập tên truyện cần tìm trên ${selectedSource?.name}.`
+                  ? t('downloadSource.selectSourceDesc')
+                  : t('downloadSource.searchOnDesc', { source: selectedSource?.name })
                 }
               </DialogDescription>
             </div>
@@ -222,7 +222,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
             {loadingSources ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-3">
                 <Loader2Icon className="h-8 w-8 text-primary animate-spin" />
-                <p className="text-xs text-muted-foreground">Đang tải danh sách nguồn truyện...</p>
+                <p className="text-xs text-muted-foreground">{t('downloadSource.loadingSources')}</p>
               </div>
             ) : (
               <>
@@ -231,7 +231,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                   <div className="relative flex-1">
                     <SearchIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      placeholder="Tìm kiếm nguồn hoặc dán link truyện vào đây..."
+                      placeholder={t('downloadSource.searchPlaceholder')}
                       value={sourceSearchQuery}
                       onChange={(e) => setSourceSearchQuery(e.target.value)}
                       className="pl-10 pr-20 h-10 bg-card/40 border-none focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl text-xs outline-none w-full"
@@ -250,7 +250,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                       }}
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2 text-[10px] font-medium bg-primary/15 hover:bg-primary/25 text-primary rounded-lg border-none cursor-pointer"
                     >
-                      Dán link
+                      {t('downloadSource.pasteLink')}
                     </Button>
                   </div>
                 </div>
@@ -295,9 +295,9 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-12">
                       <SearchIcon className="h-8 w-8 text-muted-foreground/40 shrink-0" />
-                      <p className="text-xs font-semibold text-foreground">Không tìm thấy nguồn truyện nào</p>
+                      <p className="text-xs font-semibold text-foreground">{t('downloadSource.noSourcesFoundTitle')}</p>
                       <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
-                        Thử lại bằng từ khóa khác hoặc đảm bảo bạn đã đồng bộ các script tải từ HaruNeko.
+                        {t('downloadSource.noSourcesFoundDesc')}
                       </p>
                     </div>
                   )}
@@ -313,7 +313,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                 <SearchIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   autoFocus
-                  placeholder="Nhập tên manga hoặc dán link truyện để tìm..."
+                  placeholder={t('downloadSource.searchMangaPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`pl-10 ${isSearching ? 'pr-24' : 'pr-16'} h-11 bg-card/40 border-none focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-xl outline-none w-full`}
@@ -335,7 +335,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                   }}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 px-2.5 text-xs font-medium bg-primary/15 hover:bg-primary/25 text-primary rounded-lg border-none cursor-pointer"
                 >
-                  Dán
+                  {t('downloadSource.paste')}
                 </Button>
               </div>
             </div>
@@ -345,9 +345,9 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
               <div className="flex items-center gap-2.5 min-w-0">
                 <FolderIcon className="h-4.5 w-4.5 text-primary shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-semibold text-foreground">Thư mục lưu dự án</span>
+                  <span className="text-xs font-semibold text-foreground">{t('downloadSource.projectPath')}</span>
                   <span className="text-[10px] text-muted-foreground truncate font-mono">
-                    {customPath || 'Mặc định (Thư mục dự án của Koharu)'}
+                    {customPath || t('downloadSource.defaultPath')}
                   </span>
                 </div>
               </div>
@@ -357,7 +357,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                 onClick={handleSelectFolder}
                 className="h-8 text-xs font-medium border-border/50 hover:bg-muted/40 cursor-pointer rounded-lg shrink-0"
               >
-                Thay đổi...
+                {t('downloadSource.change')}
               </Button>
             </div>
 
@@ -367,13 +367,13 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                 <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
                   <BookOpenIcon className="h-10 w-10 text-muted-foreground/60 shrink-0" />
                   <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
-                    Nhập từ khóa tìm kiếm để bắt đầu tra cứu truyện tranh trực tuyến từ {selectedSource?.name}.
+                    {t('downloadSource.mangaSearchHint', { source: selectedSource?.name })}
                   </p>
                 </div>
               ) : isSearching && !searchResults ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3">
                   <Loader2Icon className="h-8 w-8 text-primary animate-spin" />
-                  <p className="text-xs text-muted-foreground">Đang tìm kiếm...</p>
+                  <p className="text-xs text-muted-foreground">{t('downloadSource.searching')}</p>
                 </div>
               ) : searchResults && searchResults.length > 0 ? (
                 <div className="flex-1 overflow-y-auto pr-1">
@@ -405,7 +405,7 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                               {manga.title}
                             </h3>
                             <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
-                              {manga.description || 'Không có mô tả.'}
+                              {manga.description || t('downloadSource.noDescription')}
                             </p>
                           </div>
                           <div className="flex items-center justify-between mt-2 shrink-0">
@@ -421,12 +421,12 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
                               {creatingId === manga.id ? (
                                 <>
                                   <Loader2Icon className="h-3 w-3 animate-spin" />
-                                  Đang tạo...
+                                  {t('downloadSource.creating')}
                                 </>
                               ) : (
                                 <>
                                   <PlusIcon className="h-3 w-3" />
-                                  Tạo Project
+                                  {t('downloadSource.createProject')}
                                 </>
                               )}
                             </Button>
@@ -439,9 +439,9 @@ export function DownloadSourceDialog({ open, onOpenChange }: DownloadSourceDialo
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
                   <SearchIcon className="h-8 w-8 text-muted-foreground/40 shrink-0" />
-                  <p className="text-xs font-medium text-foreground">Không tìm thấy kết quả nào</p>
+                  <p className="text-xs font-medium text-foreground">{t('downloadSource.noResultsTitle')}</p>
                   <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
-                    Vui lòng thử lại với từ khóa khác hoặc kiểm tra lại kết nối mạng.
+                    {t('downloadSource.noResultsDesc')}
                   </p>
                 </div>
               )}

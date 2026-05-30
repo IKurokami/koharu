@@ -185,21 +185,21 @@ export function Navigator() {
 
   const handleDeleteChapter = async () => {
     if (!chapterId || chapterId === 'all-chapters') {
-      alert("Lỗi: Mã chapterId không hợp lệ: " + chapterId);
+      alert(t('navigator.invalidChapterId', { chapterId }));
       return;
     }
 
     const chaptersMap = (scene as any)?.chapters || {}
     const targetChapter = chaptersMap[chapterId]
     if (!targetChapter) {
-      alert("Lỗi: Không tìm thấy targetChapter cho chapterId: " + chapterId + ". Danh sách key có sẵn: " + Object.keys(chaptersMap).join(", "));
+      alert(t('navigator.targetChapterNotFound', { chapterId, keys: Object.keys(chaptersMap).join(", ") }));
       return
     }
 
     const chapterList = Object.values(chaptersMap)
     const prevIndex = chapterList.findIndex((ch: any) => ch.id === chapterId)
     if (prevIndex === -1) {
-      alert("Lỗi: Không tìm thấy vị trí chapter (prevIndex) cho chapterId: " + chapterId);
+      alert(t('navigator.prevIndexNotFound', { chapterId }));
       return
     }
 
@@ -226,7 +226,7 @@ export function Navigator() {
     innerOps.push(ops.removeChapter(chapterId, targetChapter, prevIndex))
 
     try {
-      await applyOp(ops.batch(`Xóa Chapter ${targetChapter.name}`, innerOps))
+      await applyOp(ops.batch(t('navigator.deleteChapterOp', { name: targetChapter.name }), innerOps))
       
       const remainingChapters = chapterList.filter((ch: any) => ch.id !== chapterId)
       if (remainingChapters.length > 0) {
@@ -238,7 +238,7 @@ export function Navigator() {
       }
       setDeleteConfirmOpen(false)
     } catch (e) {
-      alert("Lỗi khi gửi yêu cầu xóa chapter lên máy chủ: " + (e instanceof Error ? e.message : String(e)));
+      alert(t('navigator.deleteChapterRequestError', { message: e instanceof Error ? e.message : String(e) }));
       console.error('Failed to delete chapter:', e)
     }
   }
@@ -255,7 +255,7 @@ export function Navigator() {
     <div
       data-testid='navigator-panel'
       data-total-pages={totalPages}
-      className='flex h-full min-h-0 w-full flex-col bg-muted/50'
+      className='flex h-full min-h-0 w-full flex-col bg-transparent'
     >
       {/* Chapter Selection Header */}
       <div className='flex items-center gap-1.5 border-b border-border bg-card/40 px-2 py-2'>
@@ -342,7 +342,7 @@ export function Navigator() {
       </div>
 
       <ScrollArea className='min-h-0 flex-1' viewportRef={viewportRef}>
-        <div className='relative w-full' style={{ height: virtualizer.getTotalSize() }}>
+        <div className='relative w-full' style={{ height: virtualizer.getTotalSize() + 24 }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const page = pages[virtualRow.index]
             return (
@@ -352,7 +352,7 @@ export function Navigator() {
                 style={{
                   height: ROW_HEIGHT,
                   top: 0,
-                  transform: `translateY(${virtualRow.start}px)`,
+                  transform: `translateY(${virtualRow.start + 12}px)`,
                 }}
               >
                 <PagePreview
@@ -411,17 +411,17 @@ export function Navigator() {
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle>Xóa Chapter</DialogTitle>
+            <DialogTitle>{t('navigator.deleteChapterTitle')}</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn xóa chapter này? Tất cả các trang thuộc chapter này cũng sẽ bị xóa vĩnh viễn khỏi dự án. Thao tác này không thể hoàn tác trực tiếp nhưng bạn có thể Undo (Ctrl+Z) nếu muốn khôi phục.
+              {t('navigator.deleteChapterConfirm')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type='button' variant='outline' onClick={() => setDeleteConfirmOpen(false)}>
-              Hủy
+              {t('common.cancel')}
             </Button>
             <Button variant='destructive' onClick={handleDeleteChapter}>
-              Xóa Vĩnh Viễn
+              {t('navigator.deleteForever')}
             </Button>
           </DialogFooter>
         </DialogContent>

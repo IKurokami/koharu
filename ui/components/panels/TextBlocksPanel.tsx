@@ -375,7 +375,7 @@ function BlockCard({
                     <TooltipTrigger asChild>
                       <Button
                         data-testid={`textblock-clear-${index}`}
-                        aria-label="Xóa nội dung chữ"
+                        aria-label={t('textBlocks.clearText')}
                         variant='ghost'
                         size='icon-xs'
                         disabled={processing}
@@ -386,7 +386,7 @@ function BlockCard({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side='left' sideOffset={4}>
-                      Xóa nội dung / Clear text
+                      {t('textBlocks.clearText')}
                     </TooltipContent>
                   </Tooltip>
                   <Tooltip>

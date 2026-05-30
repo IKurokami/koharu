@@ -36,7 +36,7 @@ interface DownloadChapterDialogProps {
   scene: Scene
 }
 
-function extractChapterNameFromUrl(url: string): string {
+function extractChapterNameFromUrl(url: string, defaultName: string): string {
   try {
     const parsed = new URL(url)
     const path = parsed.pathname
@@ -52,7 +52,7 @@ function extractChapterNameFromUrl(url: string): string {
       return last.replace(/[-_]+/g, ' ').replace(/\.[a-z0-9]+$/i, '')
     }
   } catch {}
-  return 'Chapter mới'
+  return defaultName
 }
 
 export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadChapterDialogProps) {
@@ -118,7 +118,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
       onOpenChange(false)
     } catch (e) {
       console.error(e)
-      setError(e instanceof Error ? e.message : 'Tải chapter thất bại. Vui lòng thử lại.')
+      setError(e instanceof Error ? e.message : t('downloadChapter.downloadFailed'))
     } finally {
       setDownloadingId(null)
     }
@@ -130,7 +130,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
     setDownloadingCustom(true)
     setError(null)
     try {
-      const derivedName = extractChapterNameFromUrl(url)
+      const derivedName = extractChapterNameFromUrl(url, t('downloadChapter.newChapter'))
       await downloadMutation.mutateAsync({
         data: {
           sourceId: sourceId || 'url',
@@ -157,7 +157,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
       onOpenChange(false)
     } catch (e) {
       console.error(e)
-      setError(e instanceof Error ? e.message : 'Tải chapter từ link thất bại. Vui lòng thử lại.')
+      setError(e instanceof Error ? e.message : t('downloadChapter.downloadFromLinkFailed'))
     } finally {
       setDownloadingCustom(false)
     }
@@ -170,7 +170,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
         <DialogHeader className="border-b border-border/40 pb-4 mb-2 shrink-0">
           <DialogTitle className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
             <CloudDownloadIcon className="h-5 w-5 text-primary" />
-            Tải Chapter từ Web
+            {t('downloadChapter.title')}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground mt-0.5">
             Manga: <span className="font-semibold text-foreground">{mangaTitle}</span>
@@ -186,10 +186,10 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
 
         {/* Custom Chapter URL paste box */}
         <div className="flex flex-col gap-2 p-3.5 rounded-xl border border-border/40 bg-card/10 mb-3 shrink-0">
-          <span className="text-xs font-semibold text-foreground">Dán link chương để tải nhanh</span>
+          <span className="text-xs font-semibold text-foreground">{t('downloadChapter.pasteLinkLabel')}</span>
           <div className="flex gap-2">
             <Input
-              placeholder="Dán link chapter (ví dụ: https://nettruyen...)"
+              placeholder={t('downloadChapter.pasteLinkPlaceholder')}
               value={customChapterUrl}
               onChange={(e) => setCustomChapterUrl(e.target.value)}
               className="h-9 text-xs bg-card/40 border-none focus-visible:ring-0 focus-visible:ring-offset-0 shadow-none rounded-lg outline-none flex-1"
@@ -208,7 +208,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
               }}
               className="h-9 px-2.5 text-xs font-medium border-border/50 hover:bg-muted/40 cursor-pointer rounded-lg shrink-0"
             >
-              Dán
+              {t('downloadChapter.paste')}
             </Button>
             <Button
               size="sm"
@@ -219,12 +219,12 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
               {downloadingCustom ? (
                 <>
                   <Loader2Icon className="h-3 w-3 animate-spin" />
-                  Đang tải...
+                  {t('downloadChapter.loading')}
                 </>
               ) : (
                 <>
                   <CloudDownloadIcon className="h-3.5 w-3.5" />
-                  Tải
+                  {t('downloadChapter.download')}
                 </>
               )}
             </Button>
@@ -235,7 +235,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
               <Loader2Icon className="h-7 w-7 text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground">Đang tải danh sách chapter trực tuyến...</p>
+              <p className="text-xs text-muted-foreground">{t('downloadChapter.fetchingOnlineChapters')}</p>
             </div>
           ) : onlineChapters.length > 0 ? (
             <div className="flex-1 overflow-y-auto pr-1">
@@ -261,7 +261,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
                         {isDownloaded ? (
                           <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
                             <CheckCircle2Icon className="h-3 w-3 shrink-0" />
-                            Đã tải
+                            {t('downloadChapter.downloaded')}
                           </div>
                         ) : (
                           <Button
@@ -273,12 +273,12 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
                             {isDownloading ? (
                               <>
                                 <Loader2Icon className="h-3 w-3 animate-spin" />
-                                Đang tải...
+                                {t('downloadChapter.downloading')}
                               </>
                             ) : (
                               <>
                                 <CloudDownloadIcon className="h-3.5 w-3.5" />
-                                Tải về
+                                {t('downloadChapter.downloadBtn')}
                               </>
                             )}
                           </Button>
@@ -294,16 +294,16 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
               <BookOpenIcon className="h-8 w-8 text-muted-foreground/40 shrink-0" />
               {!(sourceId && mangaId) ? (
                 <>
-                  <p className="text-xs font-medium text-foreground">Dự án chưa liên kết nguồn</p>
+                  <p className="text-xs font-medium text-foreground">{t('downloadChapter.noSourceLinkedTitle')}</p>
                   <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
-                    Dự án này được tạo thủ công nên không thể lấy danh sách chapter tự động. Bạn hãy dán link chapter ở trên để tải trực tiếp nhé!
+                    {t('downloadChapter.noSourceLinkedDesc')}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-xs font-medium text-foreground">Không tìm thấy chapter nào</p>
+                  <p className="text-xs font-medium text-foreground">{t('downloadChapter.noChaptersFoundTitle')}</p>
                   <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
-                    Nguồn truyện này hiện chưa cập nhật chapter nào hoặc ngôn ngữ bạn chọn không khả dụng. Bạn vẫn có thể dán link chapter ở trên để tải trực tiếp!
+                    {t('downloadChapter.noChaptersFoundDesc')}
                   </p>
                 </>
               )}
@@ -319,7 +319,7 @@ export function DownloadChapterDialog({ open, onOpenChange, scene }: DownloadCha
             disabled={!!downloadingId || downloadingCustom}
             className="w-full sm:w-auto text-xs h-9 rounded-lg"
           >
-            Đóng
+            {t('common.close')}
           </Button>
         </DialogFooter>
 

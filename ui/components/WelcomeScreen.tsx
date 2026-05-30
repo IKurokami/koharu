@@ -10,6 +10,7 @@ import {
   SearchIcon,
   Trash2Icon,
   XIcon,
+  SettingsIcon,
 } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useMemo, useState } from 'react'
@@ -33,6 +34,8 @@ import { createAndOpenProject, switchProject, deleteProjectById, importFolderAsP
 import { cn } from '@/lib/utils'
 import { isTauri } from '@/lib/backend'
 import { DownloadSourceDialog } from '@/components/DownloadSourceDialog'
+import { SettingsDialog, type TabId } from '@/components/SettingsDialog'
+import { FlickeringGrid } from '@/components/FlickeringGrid'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -62,6 +65,8 @@ export function WelcomeScreen() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<TabId>('appearance')
 
   const filteredProjects = useMemo(() => {
     if (!searchQuery.trim()) return projects
@@ -147,9 +152,20 @@ export function WelcomeScreen() {
   }, [refetchProjects])
 
   return (
-    <div className='flex min-h-0 flex-1 overflow-hidden bg-background'>
+    <div className='relative flex min-h-0 flex-1 overflow-hidden bg-background'>
+      {/* Animated Flickering Grid Background */}
+      <div className='absolute inset-0 pointer-events-none z-0 opacity-35 dark:opacity-[0.18]'>
+        <FlickeringGrid
+          squareSize={4}
+          gridGap={6}
+          flickerChance={0.25}
+          color="rgb(99, 102, 241)"
+          maxOpacity={0.25}
+        />
+      </div>
+
       {/* ── Left Sidebar ── */}
-      <aside className='flex w-52 shrink-0 flex-col border-r border-border/50 bg-muted/30'>
+      <aside className='relative z-10 flex w-52 shrink-0 flex-col border-r border-border/50 bg-[#fbfbfb] dark:bg-[#252425]'>
         {/* Branding */}
         <div className='flex items-center gap-2.5 px-4 pt-5 pb-4'>
           <Image src='/icon.png' alt='Koharu' width={32} height={32} priority className='shrink-0' />
@@ -171,118 +187,180 @@ export function WelcomeScreen() {
         {/* Spacer */}
         <div className='flex-1' />
 
-        {/* Sidebar Footer — version or settings could go here */}
-        <div className='px-4 py-3'>
-          <p className='text-[10px] text-muted-foreground/50 select-none'>
-            Manga Translation Workspace
-          </p>
+        {/* Bottom Actions like Rider */}
+        <div className='mt-auto border-t border-border/40 p-2 flex flex-col gap-0.5 select-none'>
+          <button 
+            onClick={() => {
+              setSettingsTab('appearance')
+              setSettingsOpen(true)
+            }}
+            className='flex items-center gap-2 rounded px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground cursor-pointer text-left w-full transition-all duration-200'
+          >
+            <SettingsIcon className='h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0' />
+            <span className='flex-1'>{t('menu.settings')}</span>
+          </button>
         </div>
       </aside>
 
       {/* ── Main Content ── */}
-      <main className='flex min-w-0 flex-1 flex-col'>
-        {/* Top Bar: Search + Action Buttons */}
-        <div className='flex items-center gap-2 border-b border-border/40 px-4 py-2.5'>
-          {/* Search */}
-          <div className='relative flex-1 max-w-xs'>
-            <SearchIcon className='absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60' />
-            <input
-              type='text'
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder='Tìm kiếm dự án...'
-              className={cn(
-                'h-8 w-full rounded-md border border-border/50 bg-background pl-8 pr-3 text-xs text-foreground outline-none',
-                'placeholder:text-muted-foreground/50',
-                'focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
-                'transition-colors duration-150',
+      <main className={cn(
+        'relative z-10 flex min-w-0 flex-1 flex-col justify-start',
+        projects.length > 0 ? 'pt-0' : 'pt-[12vh]'
+      )}>
+        {projects.length > 0 ? (
+          <>
+            {/* Top Bar: Search + Action Buttons */}
+            <div className='flex items-center gap-2 border-b border-border/40 px-4 py-2.5 shrink-0'>
+              {/* Search */}
+              <div className='relative flex-1 max-w-xs'>
+                <SearchIcon className='absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60' />
+                <input
+                  type='text'
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('welcome.searchProjects')}
+                  className={cn(
+                    'h-8 w-full rounded-md border border-border/50 bg-background pl-8 pr-3 text-xs text-foreground outline-none',
+                    'placeholder:text-muted-foreground/50',
+                    'focus:border-primary/50 focus:ring-1 focus:ring-primary/20',
+                    'transition-colors duration-150',
+                  )}
+                />
+                {searchQuery && (
+                  <button
+                    type='button'
+                    onClick={() => setSearchQuery('')}
+                    className='absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer'
+                  >
+                    <XIcon className='h-3 w-3' />
+                  </button>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <ActionButton
+                onClick={() => setNewDialogOpen(true)}
+                disabled={!!busy}
+                icon={<PlusIcon className='h-3.5 w-3.5' />}
+                label={t('welcome.new')}
+              />
+              <ActionButton
+                onClick={() => setDownloadSourceOpen(true)}
+                disabled={!!busy}
+                icon={<DownloadIcon className='h-3.5 w-3.5' />}
+                label={t('welcome.downloadFromWeb')}
+              />
+              <ActionButton
+                onClick={importKhr}
+                disabled={!!busy}
+                icon={<FileArchiveIcon className='h-3.5 w-3.5' />}
+                label={t('welcome.importKhr')}
+                variant='ghost'
+              />
+              {isTauri() && (
+                <ActionButton
+                  onClick={importFolder}
+                  disabled={!!busy}
+                  icon={<FolderIcon className='h-3.5 w-3.5' />}
+                  label={t('welcome.importFolder') || 'Import Folder'}
+                  variant='ghost'
+                />
               )}
-            />
-            {searchQuery && (
-              <button
-                type='button'
-                onClick={() => setSearchQuery('')}
-                className='absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-muted-foreground cursor-pointer'
-              >
-                <XIcon className='h-3 w-3' />
-              </button>
+            </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div className='flex items-start gap-2 border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive shrink-0'>
+                <AlertCircleIcon className='mt-0.5 h-3.5 w-3.5 shrink-0' />
+                <div className='flex-1'>{error}</div>
+                <button
+                  type='button'
+                  onClick={() => setError(null)}
+                  className='cursor-pointer text-destructive/70 hover:text-destructive'
+                  aria-label='dismiss'
+                >
+                  <XIcon className='h-3.5 w-3.5' />
+                </button>
+              </div>
             )}
-          </div>
 
-          {/* Action Buttons */}
-          <ActionButton
-            onClick={() => setNewDialogOpen(true)}
-            disabled={!!busy}
-            icon={<PlusIcon className='h-3.5 w-3.5' />}
-            label={t('welcome.new')}
-          />
-          <ActionButton
-            onClick={() => setDownloadSourceOpen(true)}
-            disabled={!!busy}
-            icon={<DownloadIcon className='h-3.5 w-3.5' />}
-            label='Tải từ mạng'
-          />
-          <ActionButton
-            onClick={importKhr}
-            disabled={!!busy}
-            icon={<FileArchiveIcon className='h-3.5 w-3.5' />}
-            label={t('welcome.importKhr')}
-            variant='ghost'
-          />
-          {isTauri() && (
-            <ActionButton
-              onClick={importFolder}
-              disabled={!!busy}
-              icon={<FolderIcon className='h-3.5 w-3.5' />}
-              label={t('welcome.importFolder') || 'Import Folder'}
-              variant='ghost'
-            />
-          )}
-        </div>
+            {/* Project List */}
+            <ScrollArea className='flex-1'>
+              {filteredProjects.length > 0 ? (
+                <ul className='flex flex-col'>
+                  {filteredProjects.map((p) => (
+                    <ProjectRow
+                      key={p.id}
+                      project={p}
+                      onOpen={openById}
+                      onDelete={(id) => {
+                        setProjectToDelete(id)
+                        setDeleteConfirmOpen(true)
+                      }}
+                      disabled={busy === 'open'}
+                      highlight={searchQuery}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <div className='flex flex-col items-center justify-center py-16 text-muted-foreground/60'>
+                  <SearchIcon className='h-8 w-8 mb-2 opacity-40' />
+                  <p className='text-xs'>{t('welcome.noMatchingProjects')}</p>
+                </div>
+              )}
+            </ScrollArea>
+          </>
+        ) : (
+          <div className='flex flex-col items-center justify-center py-12 px-8 max-w-2xl mx-auto text-center'>
+            <h1 className='text-4xl font-bold tracking-tight text-foreground mb-4 select-none'>
+              Welcome to Koharu
+            </h1>
+            <p className='text-sm text-muted-foreground/80 max-w-md mb-12 whitespace-pre-line leading-relaxed select-none'>
+              Create a new project to start from scratch.\nOpen existing project from disk or download from web.
+            </p>
 
-        {/* Error Banner */}
-        {error && (
-          <div className='flex items-start gap-2 border-b border-destructive/20 bg-destructive/5 px-4 py-2 text-xs text-destructive'>
-            <AlertCircleIcon className='mt-0.5 h-3.5 w-3.5 shrink-0' />
-            <div className='flex-1'>{error}</div>
-            <button
-              type='button'
-              onClick={() => setError(null)}
-              className='cursor-pointer text-destructive/70 hover:text-destructive'
-              aria-label='dismiss'
-            >
-              <XIcon className='h-3.5 w-3.5' />
-            </button>
+            <div className='flex items-center justify-center gap-12'>
+              {/* New Project Card */}
+              <button
+                onClick={() => setNewDialogOpen(true)}
+                className='flex flex-col items-center gap-3 group focus:outline-none cursor-pointer'
+              >
+                <div className='w-20 h-20 rounded-2xl border border-primary/40 bg-primary/5 flex items-center justify-center transition-all duration-300 shadow-md'>
+                  <PlusIcon className='w-8 h-8 text-primary group-hover:scale-110 transition-transform duration-300' />
+                </div>
+                <span className='text-xs font-semibold text-foreground/80 group-hover:text-primary transition-colors'>
+                  {t('welcome.new')}
+                </span>
+              </button>
+
+              {/* Open/Import Card */}
+              <button
+                onClick={isTauri() ? importFolder : importKhr}
+                className='flex flex-col items-center gap-3 group focus:outline-none cursor-pointer'
+              >
+                <div className='w-20 h-20 rounded-2xl border border-border bg-card flex items-center justify-center transition-all duration-300 shadow-sm'>
+                  <FolderIcon className='w-8 h-8 text-muted-foreground/75 group-hover:text-primary transition-colors group-hover:scale-110 transition-transform duration-300' />
+                </div>
+                <span className='text-xs font-semibold text-foreground/80 group-hover:text-primary transition-colors'>
+                  {t('menu.open')}
+                </span>
+              </button>
+
+              {/* Get from VCS / Network Card */}
+              <button
+                onClick={() => setDownloadSourceOpen(true)}
+                className='flex flex-col items-center gap-3 group focus:outline-none cursor-pointer'
+              >
+                <div className='w-20 h-20 rounded-2xl border border-border bg-card flex items-center justify-center transition-all duration-300 shadow-sm'>
+                  <DownloadIcon className='w-8 h-8 text-muted-foreground/75 group-hover:text-primary transition-colors group-hover:scale-110 transition-transform duration-300' />
+                </div>
+                <span className='text-xs font-semibold text-foreground/80 group-hover:text-primary transition-colors'>
+                  {t('welcome.downloadFromWeb')}
+                </span>
+              </button>
+            </div>
           </div>
         )}
-
-        {/* Project List */}
-        <ScrollArea className='flex-1'>
-          {filteredProjects.length > 0 ? (
-            <ul className='flex flex-col'>
-              {filteredProjects.map((p) => (
-                <ProjectRow
-                  key={p.id}
-                  project={p}
-                  onOpen={openById}
-                  onDelete={(id) => {
-                    setProjectToDelete(id)
-                    setDeleteConfirmOpen(true)
-                  }}
-                  disabled={busy === 'open'}
-                  highlight={searchQuery}
-                />
-              ))}
-            </ul>
-          ) : searchQuery ? (
-            <div className='flex flex-col items-center justify-center py-16 text-muted-foreground/60'>
-              <SearchIcon className='h-8 w-8 mb-2 opacity-40' />
-              <p className='text-xs'>Không tìm thấy dự án phù hợp</p>
-            </div>
-          ) : (
-            <EmptyState />
-          )}
-        </ScrollArea>
       </main>
 
       {/* ── Dialogs ── */}
@@ -298,20 +376,26 @@ export function WelcomeScreen() {
         onOpenChange={setDownloadSourceOpen}
       />
 
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        defaultTab={settingsTab}
+      />
+
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle>Xóa dự án</DialogTitle>
+            <DialogTitle>{t('welcome.deleteProjectTitle')}</DialogTitle>
             <DialogDescription>
-              Bạn có chắc muốn xóa dự án này? Tất cả dữ liệu scene, layer, ảnh và bản dịch sẽ bị xóa vĩnh viễn. Thao tác này không thể hoàn tác.
+              {t('welcome.deleteProjectConfirm')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type='button' variant='outline' onClick={() => setDeleteConfirmOpen(false)}>
-              Hủy
+              {t('common.cancel')}
             </Button>
             <Button variant='destructive' onClick={onDeleteConfirm}>
-              Xóa vĩnh viễn
+              {t('welcome.deleteProjectForever')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -386,7 +470,7 @@ function EmptyState() {
         <FolderIcon className='h-6 w-6 opacity-40' />
       </div>
       <p className='text-xs mb-0.5 font-medium'>{t('welcome.emptyHint')}</p>
-      <p className='text-[10px] text-muted-foreground/40'>Tạo dự án mới hoặc nhập tệp để bắt đầu</p>
+      <p className='text-[10px] text-muted-foreground/40'>{t('welcome.newProjectSubtitle')}</p>
     </div>
   )
 }
@@ -408,6 +492,7 @@ function ProjectRow({
   disabled?: boolean
   highlight?: string
 }) {
+  const { t } = useTranslation()
   const when = project.updatedAtMs && project.updatedAtMs > 0 ? new Date(project.updatedAtMs) : null
 
   const content = (
@@ -448,7 +533,7 @@ function ProjectRow({
         {when && (
           <div className='flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/50'>
             <ClockIcon className='h-3 w-3' />
-            {formatRelative(when)}
+            {formatRelative(when, t)}
           </div>
         )}
       </button>
@@ -465,7 +550,7 @@ function ProjectRow({
               onDelete(project.id)
             }}
             disabled={disabled}
-            title='Xóa dự án'
+            title={t('welcome.deleteProject')}
           >
             <Trash2Icon className='h-3.5 w-3.5' />
           </Button>
@@ -489,7 +574,7 @@ function ProjectRow({
           disabled={disabled}
           className='text-xs py-1.5 px-2.5 rounded-lg cursor-pointer'
         >
-          Mở dự án
+          {t('welcome.openProject')}
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() => onDelete(project.id)}
@@ -497,7 +582,7 @@ function ProjectRow({
           className='text-xs py-1.5 px-2.5 rounded-lg text-destructive focus:text-destructive-foreground focus:bg-destructive cursor-pointer flex items-center'
         >
           <Trash2Icon className='mr-2 h-3.5 w-3.5 shrink-0' />
-          Xóa dự án
+          {t('welcome.deleteProject')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -543,15 +628,15 @@ function highlightText(text: string, query: string): React.ReactNode {
   )
 }
 
-function formatRelative(d: Date): string {
+function formatRelative(d: Date, t: any): string {
   const diff = Date.now() - d.getTime()
   const m = 60_000
   const h = 3_600_000
   const day = 86_400_000
-  if (diff < m) return 'vừa xong'
-  if (diff < h) return `${Math.floor(diff / m)} phút`
-  if (diff < day) return `${Math.floor(diff / h)} giờ`
-  if (diff < day * 30) return `${Math.floor(diff / day)} ngày`
+  if (diff < m) return t('welcome.time.justNow')
+  if (diff < h) return t('welcome.time.minutes', { count: Math.floor(diff / m) })
+  if (diff < day) return t('welcome.time.hours', { count: Math.floor(diff / h) })
+  if (diff < day * 30) return t('welcome.time.days', { count: Math.floor(diff / day) })
   return d.toLocaleDateString()
 }
 

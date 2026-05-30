@@ -20,6 +20,7 @@ import {
   resolvePinchNextScaleRatio,
 } from '@/components/canvas/zoomGestures'
 import { Image } from '@/components/Image'
+import { FlickeringGrid } from '@/components/FlickeringGrid'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -273,16 +274,27 @@ export function Workspace() {
   )
 
   return (
-    <div className='relative flex min-h-0 min-w-0 flex-1 bg-muted'>
+    <div className='relative flex min-h-0 min-w-0 flex-1 bg-transparent'>
       <ToolRail />
       <SubToolRail />
       <div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
         <CanvasToolbar />
-        <ScrollAreaPrimitive.Root className='flex min-h-0 min-w-0 flex-1'>
+        <ScrollAreaPrimitive.Root className='flex min-h-0 min-w-0 flex-1 relative bg-transparent'>
+          {/* Ambient Flickering Grid background for the center panel workspace */}
+          <div className='absolute inset-0 pointer-events-none z-0 opacity-40 dark:opacity-[0.16]'>
+            <FlickeringGrid
+              squareSize={4}
+              gridGap={6}
+              flickerChance={0.25}
+              color="rgb(99, 102, 241)"
+              maxOpacity={0.25}
+            />
+          </div>
+
           <ScrollAreaPrimitive.Viewport
             ref={handleViewportRef}
             data-testid='workspace-viewport'
-            className='grid size-full place-content-center-safe'
+            className='grid size-full place-content-center-safe relative z-10 bg-transparent'
           >
             {page ? (
               <ContextMenu
@@ -315,6 +327,16 @@ export function Workspace() {
                         }}
                       />
                       <div className='absolute inset-0'>
+                        {/* Flickering Grid in the background of the image canvas */}
+                        <div className='absolute inset-0 pointer-events-none z-0 opacity-40 dark:opacity-[0.16]'>
+                          <FlickeringGrid
+                            squareSize={4}
+                            gridGap={6}
+                            flickerChance={0.25}
+                            color="rgb(99, 102, 241)"
+                            maxOpacity={0.25}
+                          />
+                        </div>
                         <Image
                           data={imageData}
                           dataKey={imageHash ?? undefined}
