@@ -336,7 +336,7 @@ function LlmStatusPopover() {
     const page = scene.pages[pageId]
     if (!page) return
     const textNodes = textNodesOf(page)
-    const clearOps = textNodes.map((node) => 
+    const clearOps = textNodes.map((node) =>
       ops.updateNode(pageId, node.id, {
         data: {
           text: {
@@ -379,13 +379,13 @@ function LlmStatusPopover() {
     const currentPage = scene.pages[pageId]
     if (!currentPage) return
     const currentChapterId = currentPage.chapterId
-    
+
     const chapterPages = Object.values(scene.pages).filter(
       (p) => p.chapterId === currentChapterId
     )
-    
-    const clearOps = chapterPages.flatMap((p) => 
-      textNodesOf(p).map((node) => 
+
+    const clearOps = chapterPages.flatMap((p) =>
+      textNodesOf(p).map((node) =>
         ops.updateNode(p.id, node.id, {
           data: {
             text: {
@@ -398,7 +398,7 @@ function LlmStatusPopover() {
         })
       )
     )
-    
+
     if (clearOps.length > 0) {
       await applyOp(ops.batch("Clear chapter translation", clearOps))
       queueAutoRender(pageId)
@@ -410,14 +410,14 @@ function LlmStatusPopover() {
     const currentPage = scene.pages[pageId]
     if (!currentPage) return
     const currentChapterId = currentPage.chapterId
-    
+
     const chapterPages = Object.values(scene.pages).filter(
       (p) => p.chapterId === currentChapterId
     )
     const chapterPageIds = chapterPages.map((p) => p.id)
-    
+
     await handleClearChapter()
-    
+
     const cfg = await getConfig()
     if (!cfg.pipeline) return
     const translator = cfg.pipeline.translator
@@ -544,7 +544,7 @@ function LlmStatusPopover() {
         </div>
         <div className='flex flex-col gap-1.5 px-3 pt-2 pb-3 bg-muted/20'>
           <span className='text-[10px] font-medium text-muted-foreground uppercase'>
-            Công cụ dịch / Translation Tools
+            Công cụ dịch
           </span>
           <div className='flex flex-col gap-2'>
             <div className='flex items-center gap-1.5'>
@@ -556,7 +556,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || isProcessing}
                 onClick={handleClearPage}
               >
-                Xóa / Clear
+                Xóa
               </Button>
               <Button
                 variant='default'
@@ -565,7 +565,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslatePage}
               >
-                Dịch lại / Redo
+                Dịch lại
               </Button>
             </div>
             <div className='flex items-center gap-1.5'>
@@ -577,7 +577,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || isProcessing}
                 onClick={handleClearChapter}
               >
-                Xóa / Clear
+                Xóa
               </Button>
               <Button
                 variant='default'
@@ -586,7 +586,7 @@ function LlmStatusPopover() {
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslateChapter}
               >
-                Dịch lại / Redo
+                Dịch lại
               </Button>
             </div>
           </div>

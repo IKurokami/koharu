@@ -29,4 +29,6 @@ export interface StartPipelineRequest {
      * @nullable
      */
   textNodeIds?: NodeId[] | null;
+  /** @nullable */
+  draft?: boolean | null;
 }

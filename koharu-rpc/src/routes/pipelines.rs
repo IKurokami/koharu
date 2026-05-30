@@ -50,6 +50,8 @@ pub struct StartPipelineRequest {
     pub default_font: Option<String>,
     #[serde(default)]
     pub reading_order: Option<ReadingOrder>,
+    #[serde(default)]
+    pub draft: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -88,6 +90,7 @@ async fn start_pipeline(
             text_node_ids: req.text_node_ids,
             region: req.region,
             reading_order: req.reading_order,
+            draft: req.draft,
         },
     };
 

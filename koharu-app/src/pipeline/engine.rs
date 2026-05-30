@@ -63,6 +63,7 @@ pub struct PipelineRunOptions {
     /// and process just that one block. Other engines ignore it.
     pub region: Option<Region>,
     pub reading_order: Option<ReadingOrder>,
+    pub draft: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------

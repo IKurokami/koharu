@@ -13,6 +13,7 @@ use koharu_core::{
     ImageRole, MaskRole, NodeDataPatch, NodePatch, Op, TextDataPatch, TextStyle, Transform,
 };
 use koharu_llm::Language;
+use koharu_renderer::renderer::RasterOptions;
 
 use crate::pipeline::artifacts::Artifact;
 use crate::pipeline::engine::{Engine, EngineCtx, EngineInfo};
@@ -78,7 +79,11 @@ impl Engine for Model {
                 .target_language
                 .as_deref()
                 .map(render_target_language_tag),
-            raster: Default::default(),
+            raster: if ctx.options.draft.unwrap_or(false) {
+                RasterOptions::supersampled(1)
+            } else {
+                Default::default()
+            },
         };
 
         // `render_page` is synchronous and CPU-bound. It runs inline on the
