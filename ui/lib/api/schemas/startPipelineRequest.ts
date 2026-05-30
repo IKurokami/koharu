@@ -11,6 +11,8 @@ import type { Region } from './region';
 export interface StartPipelineRequest {
   /** @nullable */
   defaultFont?: string | null;
+  /** @nullable */
+  draft?: boolean | null;
   /**
      * `None` → whole project, `Some(pages)` → just those pages.
      * @nullable
@@ -29,6 +31,4 @@ export interface StartPipelineRequest {
      * @nullable
      */
   textNodeIds?: NodeId[] | null;
-  /** @nullable */
-  draft?: boolean | null;
 }

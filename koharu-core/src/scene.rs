@@ -173,6 +173,12 @@ pub struct ProjectMeta {
     pub style: ProjectStyle,
     #[serde(default)]
     pub sync_dir: Option<String>,
+    #[serde(default)]
+    pub source_id: Option<String>,
+    #[serde(default)]
+    pub manga_id: Option<String>,
+    #[serde(default)]
+    pub manga_title: Option<String>,
 }
 
 impl Default for ProjectMeta {
@@ -184,6 +190,9 @@ impl Default for ProjectMeta {
             updated_at: now,
             style: ProjectStyle::default(),
             sync_dir: None,
+            source_id: None,
+            manga_id: None,
+            manga_title: None,
         }
     }
 }

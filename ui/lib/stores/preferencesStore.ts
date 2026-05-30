@@ -27,6 +27,8 @@ type PreferencesState = {
   setCodexImagePrompt: (prompt?: string) => void
   codexImageModel?: string
   setCodexImageModel: (model?: string) => void
+  preferredCustomSavePath?: string | null
+  setPreferredCustomSavePath: (path: string | null) => void
   shortcuts: {
     select: string
     block: string
@@ -62,6 +64,7 @@ const initialPreferences = {
   },
   codexImagePrompt: DEFAULT_CODEX_IMAGE_PROMPT,
   codexImageModel: 'gpt-5.5',
+  preferredCustomSavePath: null,
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -85,6 +88,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       setCustomSystemPrompt: (prompt) => set({ customSystemPrompt: prompt }),
       setCodexImagePrompt: (prompt) => set({ codexImagePrompt: prompt }),
       setCodexImageModel: (model) => set({ codexImageModel: model }),
+      setPreferredCustomSavePath: (path) => set({ preferredCustomSavePath: path }),
       setShortcuts: (shortcuts) =>
         set((state) => ({
           shortcuts: {
@@ -147,6 +151,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         codexImagePrompt: state.codexImagePrompt,
         codexImageModel: state.codexImageModel,
         shortcuts: state.shortcuts,
+        preferredCustomSavePath: state.preferredCustomSavePath,
       }),
     },
   ),

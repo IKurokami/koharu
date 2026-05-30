@@ -37,6 +37,7 @@
     "processAll": "Process all images",
     "help": "Help",
     "settings": "Settings",
+    "syncHaruNeko": "Sync HaruNeko Scripts...",
     "discord": "Discord",
     "github": "GitHub",
     "version": "Version: {{version}}",

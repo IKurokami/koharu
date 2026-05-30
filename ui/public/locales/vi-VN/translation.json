@@ -37,6 +37,7 @@
     "processAll": "Xử lý tất cả ảnh",
     "help": "Trợ giúp",
     "settings": "Cài đặt",
+    "syncHaruNeko": "Đồng bộ Scripts HaruNeko...",
     "discord": "Discord",
     "github": "GitHub",
     "version": "Phiên bản: {{version}}",

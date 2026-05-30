@@ -7,7 +7,13 @@ import type { ProjectStyle } from './projectStyle';
 
 export interface ProjectMetaPatch {
   /** @nullable */
+  mangaId?: string | null;
+  /** @nullable */
+  mangaTitle?: string | null;
+  /** @nullable */
   name?: string | null;
+  /** @nullable */
+  sourceId?: string | null;
   style?: null | ProjectStyle;
   /** @nullable */
   syncDir?: string | null;

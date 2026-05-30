@@ -168,6 +168,12 @@ pub struct ProjectMetaPatch {
     pub updated_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub sync_dir: Option<Option<String>>,
+    #[serde(default)]
+    pub source_id: Option<Option<String>>,
+    #[serde(default)]
+    pub manga_id: Option<Option<String>>,
+    #[serde(default)]
+    pub manga_title: Option<Option<String>>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, ToSchema)]
@@ -298,6 +304,9 @@ impl Op {
                     style: patch.style.as_ref().map(|_| scene.project.style.clone()),
                     updated_at: patch.updated_at.as_ref().map(|_| scene.project.updated_at),
                     sync_dir: patch.sync_dir.as_ref().map(|_| scene.project.sync_dir.clone()),
+                    source_id: patch.source_id.as_ref().map(|_| scene.project.source_id.clone()),
+                    manga_id: patch.manga_id.as_ref().map(|_| scene.project.manga_id.clone()),
+                    manga_title: patch.manga_title.as_ref().map(|_| scene.project.manga_title.clone()),
                 };
                 if let Some(name) = &patch.name {
                     scene.project.name = name.clone();
@@ -310,6 +319,15 @@ impl Op {
                 }
                 if let Some(sync_dir) = &patch.sync_dir {
                     scene.project.sync_dir = sync_dir.clone();
+                }
+                if let Some(source_id) = &patch.source_id {
+                    scene.project.source_id = source_id.clone();
+                }
+                if let Some(manga_id) = &patch.manga_id {
+                    scene.project.manga_id = manga_id.clone();
+                }
+                if let Some(manga_title) = &patch.manga_title {
+                    scene.project.manga_title = manga_title.clone();
                 }
             }
 

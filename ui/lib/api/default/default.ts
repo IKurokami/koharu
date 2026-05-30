@@ -26,14 +26,18 @@ import type {
   AddImageLayerResponse,
   AppConfig,
   AppEvent,
+  CloneConnectorsRequest,
+  CloneConnectorsResponse,
   CodexAuthStatus,
   CodexDeviceLogin,
   CodexImageGenerationOptions,
   CodexImageGenerationResponse,
   ConfigPatch,
+  CreateMangaProjectRequest,
   CreatePagesFromPathsRequest,
   CreatePagesResponse,
   CreateProjectRequest,
+  DownloadMangaChapterRequest,
   EngineCatalog,
   ExportProjectRequest,
   FontFaceInfo,
@@ -41,11 +45,15 @@ import type {
   HistoryResult,
   ImportDirectoryRequest,
   ListDownloadsResponse,
+  ListMangaChaptersParams,
   ListOperationsResponse,
   ListProjectsResponse,
   LlmCatalog,
   LlmLoadRequest,
   LlmState,
+  MangaChapterListResponse,
+  MangaSearchResult,
+  MangaSource,
   MaskRole,
   MetaInfo,
   Op,
@@ -57,6 +65,7 @@ import type {
   PutMaskResponse,
   ReadingOrder,
   SceneSnapshot,
+  SearchMangaParams,
   StartDownloadRequest,
   StartDownloadResponse,
   StartPipelineRequest,
@@ -1948,7 +1957,492 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getDeleteCurrentLlmMutationOptions(options), queryClient);
     }
-    export const getGetMetaUrl = () => {
+    export const getListMangaChaptersUrl = (params: ListMangaChaptersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/manga/chapters?${stringifiedParams}` : `/api/v1/manga/chapters`
+}
+
+export const listMangaChapters = async (params: ListMangaChaptersParams, options?: RequestInit): Promise<MangaChapterListResponse> => {
+
+  return fetchApi<MangaChapterListResponse>(getListMangaChaptersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMangaChaptersQueryKey = (params?: ListMangaChaptersParams,) => {
+    return [
+    `/api/v1/manga/chapters`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMangaChaptersQueryOptions = <TData = Awaited<ReturnType<typeof listMangaChapters>>, TError = unknown>(params: ListMangaChaptersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMangaChaptersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMangaChapters>>> = ({ signal }) => listMangaChapters(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn,   gcTime: 300000, retry: 1,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMangaChaptersQueryResult = NonNullable<Awaited<ReturnType<typeof listMangaChapters>>>
+export type ListMangaChaptersQueryError = unknown
+
+
+export function useListMangaChapters<TData = Awaited<ReturnType<typeof listMangaChapters>>, TError = unknown>(
+ params: ListMangaChaptersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMangaChapters>>,
+          TError,
+          Awaited<ReturnType<typeof listMangaChapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMangaChapters<TData = Awaited<ReturnType<typeof listMangaChapters>>, TError = unknown>(
+ params: ListMangaChaptersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMangaChapters>>,
+          TError,
+          Awaited<ReturnType<typeof listMangaChapters>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMangaChapters<TData = Awaited<ReturnType<typeof listMangaChapters>>, TError = unknown>(
+ params: ListMangaChaptersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListMangaChapters<TData = Awaited<ReturnType<typeof listMangaChapters>>, TError = unknown>(
+ params: ListMangaChaptersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaChapters>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMangaChaptersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+export const getCloneConnectorsUrl = () => {
+
+
+
+
+  return `/api/v1/manga/clone-connectors`
+}
+
+export const cloneConnectors = async (cloneConnectorsRequest: CloneConnectorsRequest, options?: RequestInit): Promise<CloneConnectorsResponse> => {
+
+  return fetchApi<CloneConnectorsResponse>(getCloneConnectorsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cloneConnectorsRequest)
+  }
+);}
+
+
+
+
+export const getCloneConnectorsMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneConnectors>>, TError,{data: CloneConnectorsRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+): UseMutationOptions<Awaited<ReturnType<typeof cloneConnectors>>, TError,{data: CloneConnectorsRequest}, TContext> => {
+
+const mutationKey = ['cloneConnectors'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cloneConnectors>>, {data: CloneConnectorsRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  cloneConnectors(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloneConnectorsMutationResult = NonNullable<Awaited<ReturnType<typeof cloneConnectors>>>
+    export type CloneConnectorsMutationBody = CloneConnectorsRequest
+    export type CloneConnectorsMutationError = unknown
+
+    export const useCloneConnectors = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneConnectors>>, TError,{data: CloneConnectorsRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof cloneConnectors>>,
+        TError,
+        {data: CloneConnectorsRequest},
+        TContext
+      > => {
+      return useMutation(getCloneConnectorsMutationOptions(options), queryClient);
+    }
+    export const getDownloadMangaChapterUrl = () => {
+
+
+
+
+  return `/api/v1/manga/download-chapter`
+}
+
+export const downloadMangaChapter = async (downloadMangaChapterRequest: DownloadMangaChapterRequest, options?: RequestInit): Promise<ProjectSummary> => {
+
+  return fetchApi<ProjectSummary>(getDownloadMangaChapterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(downloadMangaChapterRequest)
+  }
+);}
+
+
+
+
+export const getDownloadMangaChapterMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof downloadMangaChapter>>, TError,{data: DownloadMangaChapterRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+): UseMutationOptions<Awaited<ReturnType<typeof downloadMangaChapter>>, TError,{data: DownloadMangaChapterRequest}, TContext> => {
+
+const mutationKey = ['downloadMangaChapter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof downloadMangaChapter>>, {data: DownloadMangaChapterRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  downloadMangaChapter(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DownloadMangaChapterMutationResult = NonNullable<Awaited<ReturnType<typeof downloadMangaChapter>>>
+    export type DownloadMangaChapterMutationBody = DownloadMangaChapterRequest
+    export type DownloadMangaChapterMutationError = unknown
+
+    export const useDownloadMangaChapter = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof downloadMangaChapter>>, TError,{data: DownloadMangaChapterRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof downloadMangaChapter>>,
+        TError,
+        {data: DownloadMangaChapterRequest},
+        TContext
+      > => {
+      return useMutation(getDownloadMangaChapterMutationOptions(options), queryClient);
+    }
+    export const getCreateMangaProjectUrl = () => {
+
+
+
+
+  return `/api/v1/manga/project`
+}
+
+export const createMangaProject = async (createMangaProjectRequest: CreateMangaProjectRequest, options?: RequestInit): Promise<ProjectSummary> => {
+
+  return fetchApi<ProjectSummary>(getCreateMangaProjectUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createMangaProjectRequest)
+  }
+);}
+
+
+
+
+export const getCreateMangaProjectMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMangaProject>>, TError,{data: CreateMangaProjectRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMangaProject>>, TError,{data: CreateMangaProjectRequest}, TContext> => {
+
+const mutationKey = ['createMangaProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMangaProject>>, {data: CreateMangaProjectRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createMangaProject(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMangaProjectMutationResult = NonNullable<Awaited<ReturnType<typeof createMangaProject>>>
+    export type CreateMangaProjectMutationBody = CreateMangaProjectRequest
+    export type CreateMangaProjectMutationError = unknown
+
+    export const useCreateMangaProject = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMangaProject>>, TError,{data: CreateMangaProjectRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createMangaProject>>,
+        TError,
+        {data: CreateMangaProjectRequest},
+        TContext
+      > => {
+      return useMutation(getCreateMangaProjectMutationOptions(options), queryClient);
+    }
+    export const getSearchMangaUrl = (params: SearchMangaParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/manga/search?${stringifiedParams}` : `/api/v1/manga/search`
+}
+
+export const searchManga = async (params: SearchMangaParams, options?: RequestInit): Promise<MangaSearchResult[]> => {
+
+  return fetchApi<MangaSearchResult[]>(getSearchMangaUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchMangaQueryKey = (params?: SearchMangaParams,) => {
+    return [
+    `/api/v1/manga/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchMangaQueryOptions = <TData = Awaited<ReturnType<typeof searchManga>>, TError = unknown>(params: SearchMangaParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchMangaQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchManga>>> = ({ signal }) => searchManga(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn,   gcTime: 300000, retry: 1,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SearchMangaQueryResult = NonNullable<Awaited<ReturnType<typeof searchManga>>>
+export type SearchMangaQueryError = unknown
+
+
+export function useSearchManga<TData = Awaited<ReturnType<typeof searchManga>>, TError = unknown>(
+ params: SearchMangaParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchManga>>,
+          TError,
+          Awaited<ReturnType<typeof searchManga>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchManga<TData = Awaited<ReturnType<typeof searchManga>>, TError = unknown>(
+ params: SearchMangaParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchManga>>,
+          TError,
+          Awaited<ReturnType<typeof searchManga>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchManga<TData = Awaited<ReturnType<typeof searchManga>>, TError = unknown>(
+ params: SearchMangaParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useSearchManga<TData = Awaited<ReturnType<typeof searchManga>>, TError = unknown>(
+ params: SearchMangaParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchManga>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSearchMangaQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+export const getListMangaSourcesUrl = () => {
+
+
+
+
+  return `/api/v1/manga/sources`
+}
+
+export const listMangaSources = async ( options?: RequestInit): Promise<MangaSource[]> => {
+
+  return fetchApi<MangaSource[]>(getListMangaSourcesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMangaSourcesQueryKey = () => {
+    return [
+    `/api/v1/manga/sources`
+    ] as const;
+    }
+
+
+export const getListMangaSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listMangaSources>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMangaSourcesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMangaSources>>> = ({ signal }) => listMangaSources({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn,   gcTime: 300000, retry: 1,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMangaSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listMangaSources>>>
+export type ListMangaSourcesQueryError = unknown
+
+
+export function useListMangaSources<TData = Awaited<ReturnType<typeof listMangaSources>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMangaSources>>,
+          TError,
+          Awaited<ReturnType<typeof listMangaSources>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMangaSources<TData = Awaited<ReturnType<typeof listMangaSources>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMangaSources>>,
+          TError,
+          Awaited<ReturnType<typeof listMangaSources>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMangaSources<TData = Awaited<ReturnType<typeof listMangaSources>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListMangaSources<TData = Awaited<ReturnType<typeof listMangaSources>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listMangaSources>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListMangaSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+export const getGetMetaUrl = () => {
 
 
 

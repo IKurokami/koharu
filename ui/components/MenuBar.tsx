@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 
 import { fitCanvasToViewport, resetCanvasScale } from '@/components/Canvas'
 import { SettingsDialog, type TabId } from '@/components/SettingsDialog'
+import { CloneHaruNekoDialog } from '@/components/CloneHaruNekoDialog'
 import {
   Menubar,
   MenubarContent,
@@ -62,6 +63,7 @@ export function MenuBar() {
   const { t } = useTranslation()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<TabId>('appearance')
+  const [cloneHaruNekoOpen, setCloneHaruNekoOpen] = useState(false)
   const hasPage = useSelectionStore((s) => s.pageId !== null)
   const { scene } = useScene()
   const hasScene = scene !== null
@@ -269,6 +271,13 @@ export function MenuBar() {
             >
               {t('menu.settings')}
             </MenubarItem>
+            <MenubarSeparator />
+            <MenubarItem
+              className='text-[13px]'
+              onSelect={() => setCloneHaruNekoOpen(true)}
+            >
+              {t('menu.syncHaruNeko')}
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>
@@ -363,6 +372,7 @@ export function MenuBar() {
       <div data-tauri-drag-region className='flex h-full flex-1 items-center justify-center' />
       {isWindowsTauri && <WindowControls />}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} defaultTab={settingsTab} />
+      <CloneHaruNekoDialog open={cloneHaruNekoOpen} onOpenChange={setCloneHaruNekoOpen} />
     </div>
   )
 }

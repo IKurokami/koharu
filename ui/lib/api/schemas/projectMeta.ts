@@ -7,7 +7,13 @@ import type { ProjectStyle } from './projectStyle';
 
 export interface ProjectMeta {
   createdAt: string;
+  /** @nullable */
+  mangaId?: string | null;
+  /** @nullable */
+  mangaTitle?: string | null;
   name: string;
+  /** @nullable */
+  sourceId?: string | null;
   style?: ProjectStyle;
   /** @nullable */
   syncDir?: string | null;

@@ -138,6 +138,12 @@ impl App {
         self.session.store(Some(session.clone()));
         let handle = autosave::spawn(session.clone());
         *self.autosave.lock().await = Some(handle);
+
+        // Add to recent projects registry
+        if let Err(e) = crate::projects::add_recent_project(&dir) {
+            tracing::warn!("Failed to add project to recents: {e}");
+        }
+
         Ok(session)
     }
 

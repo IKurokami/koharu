@@ -88,7 +88,12 @@ fn write_khr_zip<W: Write + Seek>(project_dir_std: &std::path::Path, w: W) -> Re
 /// with `export_khr_bytes`: used by the HTTP `/projects/import` route.
 pub fn import_khr_bytes(bytes: &[u8], project_dir: &Utf8Path) -> Result<Utf8PathBuf> {
     if project_dir.exists() {
-        anyhow::bail!("destination already exists: {project_dir}");
+        let is_empty = std::fs::read_dir(project_dir.as_std_path())
+            .map(|mut entries| entries.next().is_none())
+            .unwrap_or(false);
+        if !is_empty {
+            anyhow::bail!("destination already exists and is not empty: {project_dir}");
+        }
     }
     std::fs::create_dir_all(project_dir.as_std_path())?;
     let mut archive = ZipArchive::new(Cursor::new(bytes)).context("open zip archive")?;

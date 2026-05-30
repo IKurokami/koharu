@@ -482,6 +482,184 @@
         }
       }
     },
+    "/manga/chapters": {
+      "get": {
+        "operationId": "list_manga_chapters",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "query",
+            "description": "Manga source ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mangaId",
+            "in": "query",
+            "description": "Manga ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MangaChapterListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manga/clone-connectors": {
+      "post": {
+        "operationId": "clone_connectors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneConnectorsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneConnectorsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manga/download-chapter": {
+      "post": {
+        "operationId": "download_manga_chapter",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadMangaChapterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manga/project": {
+      "post": {
+        "operationId": "create_manga_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMangaProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manga/search": {
+      "get": {
+        "operationId": "search_manga",
+        "parameters": [
+          {
+            "name": "sourceId",
+            "in": "query",
+            "description": "Manga source ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Search query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MangaSearchResult"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manga/sources": {
+      "get": {
+        "operationId": "list_manga_sources",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MangaSource"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/meta": {
       "get": {
         "operationId": "get_meta",
@@ -1351,6 +1529,39 @@
           }
         }
       },
+      "CloneConnectorsRequest": {
+        "type": "object",
+        "required": [
+          "targetDir"
+        ],
+        "properties": {
+          "targetDir": {
+            "type": "string"
+          }
+        }
+      },
+      "CloneConnectorsResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
       "CodexAuthAttemptStatus": {
         "type": "string",
         "enum": [
@@ -1540,6 +1751,31 @@
           }
         }
       },
+      "CreateMangaProjectRequest": {
+        "type": "object",
+        "required": [
+          "sourceId",
+          "mangaId",
+          "mangaTitle"
+        ],
+        "properties": {
+          "customSavePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mangaId": {
+            "type": "string"
+          },
+          "mangaTitle": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
+          }
+        }
+      },
       "CreatePagesFromPathsRequest": {
         "type": "object",
         "required": [
@@ -1618,6 +1854,29 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "DownloadMangaChapterRequest": {
+        "type": "object",
+        "required": [
+          "sourceId",
+          "mangaId",
+          "chapterId",
+          "chapterName"
+        ],
+        "properties": {
+          "chapterId": {
+            "type": "string"
+          },
+          "chapterName": {
+            "type": "string"
+          },
+          "mangaId": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string"
           }
         }
       },
@@ -2512,6 +2771,91 @@
           "local",
           "provider"
         ]
+      },
+      "MangaChapter": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "order"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "MangaChapterListResponse": {
+        "type": "object",
+        "required": [
+          "chapters"
+        ],
+        "properties": {
+          "chapters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MangaChapter"
+            }
+          }
+        }
+      },
+      "MangaSearchResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "coverUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "MangaSource": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "url",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
       },
       "MaskData": {
         "type": "object",
@@ -3432,8 +3776,26 @@
             "type": "string",
             "format": "date-time"
           },
+          "mangaId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mangaTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "name": {
             "type": "string"
+          },
+          "sourceId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "style": {
             "$ref": "#/components/schemas/ProjectStyle"
@@ -3453,7 +3815,25 @@
       "ProjectMetaPatch": {
         "type": "object",
         "properties": {
+          "mangaId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mangaTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceId": {
             "type": [
               "string",
               "null"
@@ -3740,6 +4120,12 @@
           "defaultFont": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "type": [
+              "boolean",
               "null"
             ]
           },

@@ -1,6 +1,8 @@
 'use client'
 
 import type {
+  Chapter,
+  ChapterPatch,
   ImageDataPatch,
   MaskDataPatch,
   Node,
@@ -41,6 +43,18 @@ export const ops = {
 
   reorderPages(order: string[], prevOrder: string[]): Op {
     return { reorderPages: { order, prev_order: prevOrder } } as unknown as Op
+  },
+
+  addChapter(chapter: Chapter): Op {
+    return { addChapter: { chapter } } as Op
+  },
+
+  removeChapter(id: string, chapter: Chapter, index: number): Op {
+    return { removeChapter: { id, prev_chapter: chapter, prev_index: index } } as unknown as Op
+  },
+
+  updateChapter(id: string, patch: ChapterPatch): Op {
+    return { updateChapter: { id, patch } } as Op
   },
 
   addNode(page: string, at: number, node: Node): Op {

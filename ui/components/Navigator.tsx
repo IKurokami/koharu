@@ -1,8 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { LayoutGridIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { LayoutGridIcon, PlusIcon, Trash2Icon, CloudDownloadIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { importPages } from '@/lib/io/pagesIo'
+import { DownloadChapterDialog } from '@/components/DownloadChapterDialog'
 
 import { PageManagerDialog } from '@/components/PageManagerDialog'
 import { Button } from '@/components/ui/button'
@@ -95,6 +96,8 @@ export function Navigator() {
   // Chapter Creation Dialog State
   const [createOpen, setCreateOpen] = useState(false)
   const [chapterName, setChapterName] = useState('')
+  const [downloadChapterOpen, setDownloadChapterOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   // Reset chapter selection on project switch
   const currentProjectName = scene?.project?.name;
@@ -180,6 +183,66 @@ export function Navigator() {
     }
   }
 
+  const handleDeleteChapter = async () => {
+    if (!chapterId || chapterId === 'all-chapters') {
+      alert("Lỗi: Mã chapterId không hợp lệ: " + chapterId);
+      return;
+    }
+
+    const chaptersMap = (scene as any)?.chapters || {}
+    const targetChapter = chaptersMap[chapterId]
+    if (!targetChapter) {
+      alert("Lỗi: Không tìm thấy targetChapter cho chapterId: " + chapterId + ". Danh sách key có sẵn: " + Object.keys(chaptersMap).join(", "));
+      return
+    }
+
+    const chapterList = Object.values(chaptersMap)
+    const prevIndex = chapterList.findIndex((ch: any) => ch.id === chapterId)
+    if (prevIndex === -1) {
+      alert("Lỗi: Không tìm thấy vị trí chapter (prevIndex) cho chapterId: " + chapterId);
+      return
+    }
+
+    const pagesList = Object.values(scene?.pages || {})
+    const pagesToDelete = pagesList.filter((p: any) => p.chapterId === chapterId)
+
+    const scenePagesKeys = Object.keys(scene?.pages || {})
+    
+    // Sort pages in descending order of their index to avoid index shifting when deleting them in sequence
+    const pagesToDeleteSorted = pagesToDelete
+      .map((page: any) => ({
+        page,
+        pageIndex: scenePagesKeys.indexOf(page.id)
+      }))
+      .filter(item => item.pageIndex !== -1)
+      .sort((a, b) => b.pageIndex - a.pageIndex)
+
+    const innerOps: any[] = []
+
+    pagesToDeleteSorted.forEach(({ page, pageIndex }) => {
+      innerOps.push(ops.removePage(page.id, page, pageIndex))
+    })
+
+    innerOps.push(ops.removeChapter(chapterId, targetChapter, prevIndex))
+
+    try {
+      await applyOp(ops.batch(`Xóa Chapter ${targetChapter.name}`, innerOps))
+      
+      const remainingChapters = chapterList.filter((ch: any) => ch.id !== chapterId)
+      if (remainingChapters.length > 0) {
+        const sorted = [...remainingChapters].sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+        const latest = sorted[sorted.length - 1] as any
+        setChapter(latest.id)
+      } else {
+        setChapter('all-chapters')
+      }
+      setDeleteConfirmOpen(false)
+    } catch (e) {
+      alert("Lỗi khi gửi yêu cầu xóa chapter lên máy chủ: " + (e instanceof Error ? e.message : String(e)));
+      console.error('Failed to delete chapter:', e)
+    }
+  }
+
   const handleInsertPage = async (index: number) => {
     try {
       await importPages('append', 'files', index)
@@ -223,6 +286,26 @@ export function Navigator() {
         >
           <PlusIcon className='h-3.5 w-3.5' />
         </Button>
+        <Button
+          variant='outline'
+          size='icon'
+          className='h-7 w-7 border-border/80 bg-background/50 hover:bg-background/80 text-primary hover:text-primary'
+          onClick={() => setDownloadChapterOpen(true)}
+          title="Download Chapter from Web"
+        >
+          <CloudDownloadIcon className='h-3.5 w-3.5' />
+        </Button>
+        {chapterId && chapterId !== 'all-chapters' && (
+          <Button
+            variant='outline'
+            size='icon'
+            className='h-7 w-7 border-border/80 bg-background/50 hover:bg-background/80 text-destructive hover:text-destructive hover:bg-destructive/10'
+            onClick={() => setDeleteConfirmOpen(true)}
+            title="Delete Selected Chapter"
+          >
+            <Trash2Icon className='h-3.5 w-3.5' />
+          </Button>
+        )}
       </div>
 
       <div className='flex items-center justify-between border-b border-border px-2 py-1.5'>
@@ -292,6 +375,7 @@ export function Navigator() {
 
       <PageManagerDialog open={pageManagerOpen} onOpenChange={setPageManagerOpen} />
 
+
       {/* Chapter Creation Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className='sm:max-w-md'>
@@ -322,6 +406,34 @@ export function Navigator() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Chapter Deletion Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>Xóa Chapter</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa chapter này? Tất cả các trang thuộc chapter này cũng sẽ bị xóa vĩnh viễn khỏi dự án. Thao tác này không thể hoàn tác trực tiếp nhưng bạn có thể Undo (Ctrl+Z) nếu muốn khôi phục.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setDeleteConfirmOpen(false)}>
+              Hủy
+            </Button>
+            <Button variant='destructive' onClick={handleDeleteChapter}>
+              Xóa Vĩnh Viễn
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {scene && (
+        <DownloadChapterDialog
+          open={downloadChapterOpen}
+          onOpenChange={setDownloadChapterOpen}
+          scene={scene}
+        />
+      )}
     </div>
   )
 }

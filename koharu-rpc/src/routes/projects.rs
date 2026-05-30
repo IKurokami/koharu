@@ -84,11 +84,6 @@ async fn create_project(
     }
     let config = (**app.config.load()).clone();
     let path = project_dirs::allocate_named(&config, trimmed).map_err(ApiError::internal)?;
-    // `allocate_named` atomically created the directory so concurrent
-    // callers can't collide. Session::create wants an empty-or-missing dir
-    // and writes the scaffold — remove so it can populate.
-    std::fs::remove_dir(path.as_std_path())
-        .map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
     let session = app
         .open_project(path, Some(trimmed.to_string()))
         .await
@@ -119,8 +114,11 @@ async fn put_current_project(
     Json(req): Json<OpenProjectRequest>,
 ) -> ApiResult<Json<ProjectSummary>> {
     let config = (**app.config.load()).clone();
-    let path = project_dirs::project_path(&config, &req.id)
-        .map_err(|e| ApiError::bad_request(format!("{e:#}")))?;
+    let path = project_dirs::find_recent_project_path(&req.id)
+        .or_else(|| {
+            project_dirs::project_path(&config, &req.id).ok()
+        })
+        .ok_or_else(|| ApiError::bad_request("invalid project id"))?;
     if !path.exists() {
         return Err(ApiError::not_found(format!("project {}", req.id)));
     }
@@ -143,8 +141,11 @@ async fn delete_project_by_id(
     Path(id): Path<String>,
 ) -> ApiResult<axum::http::StatusCode> {
     let config = (**app.config.load()).clone();
-    let path = project_dirs::project_path(&config, &id)
-        .map_err(|e| ApiError::bad_request(format!("{e:#}")))?;
+    let path = project_dirs::find_recent_project_path(&id)
+        .or_else(|| {
+            project_dirs::project_path(&config, &id).ok()
+        })
+        .ok_or_else(|| ApiError::bad_request("invalid project id"))?;
     if path.exists() {
         if let Some(session) = app.current_session() {
             if session.dir == path {
@@ -154,6 +155,10 @@ async fn delete_project_by_id(
         std::fs::remove_dir_all(path.as_std_path())
             .map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
     }
+    
+    // Also remove from recent projects!
+    let _ = project_dirs::remove_recent_project(&path);
+    
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
@@ -177,11 +182,6 @@ async fn import_project(
     let config = (**app.config.load()).clone();
     let dest =
         project_dirs::allocate_imported(&config, Some("imported")).map_err(ApiError::internal)?;
-    // Atomic-created dir must be removed so `import_khr_bytes` can do its
-    // own exists-check + populate.
-    std::fs::remove_dir(dest.as_std_path())
-        .map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
-
     let body_vec = body.to_vec();
     let dest_c = dest.clone();
     tokio::task::spawn_blocking(move || koharu_app::archive::import_khr_bytes(&body_vec, &dest_c))
@@ -228,8 +228,6 @@ async fn import_directory(
 
     let config = (**app.config.load()).clone();
     let dest_path = project_dirs::allocate_named(&config, &project_name).map_err(ApiError::internal)?;
-    std::fs::remove_dir(dest_path.as_std_path()).map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
-
     let session = app.open_project(dest_path, Some(project_name.clone())).await.map_err(ApiError::internal)?;
 
     // Set sync_dir metadata in ProjectMeta
@@ -239,6 +237,9 @@ async fn import_directory(
             style: None,
             updated_at: None,
             sync_dir: Some(Some(req.path.clone())),
+            source_id: None,
+            manga_id: None,
+            manga_title: None,
         },
         prev: Default::default(),
     }).map_err(ApiError::internal)?;

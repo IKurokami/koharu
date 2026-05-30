@@ -9,6 +9,7 @@ import {
   PlusIcon,
   Trash2Icon,
   XIcon,
+  GitBranchIcon,
 } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useMemo, useState } from 'react'
@@ -32,6 +33,13 @@ import { importKhrFile } from '@/lib/io/pagesIo'
 import { createAndOpenProject, switchProject, deleteProjectById, importFolderAsProject } from '@/lib/io/scene'
 import { cn } from '@/lib/utils'
 import { isTauri } from '@/lib/backend'
+import { DownloadSourceDialog } from '@/components/DownloadSourceDialog'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 
 type Busy = false | 'new' | 'open' | 'import'
 
@@ -51,6 +59,7 @@ export function WelcomeScreen() {
   const [busy, setBusy] = useState<Busy>(false)
   const [error, setError] = useState<string | null>(null)
   const [newDialogOpen, setNewDialogOpen] = useState(false)
+  const [downloadSourceOpen, setDownloadSourceOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
 
@@ -134,7 +143,7 @@ export function WelcomeScreen() {
         className='pointer-events-none absolute -top-40 left-1/2 h-80 w-[720px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl'
       />
 
-      <div className='relative z-10 mx-auto flex w-full max-w-md flex-col gap-8 px-6 pt-24 pb-10'>
+      <div className='relative z-10 mx-auto flex w-full max-w-md flex-col gap-8 px-3 pt-24 pb-10'>
         <header className='flex flex-col items-center gap-2 text-center'>
           <Image src='/icon.png' alt='Koharu' width={56} height={56} priority />
           <div className='mt-1 flex flex-col gap-0.5'>
@@ -167,6 +176,13 @@ export function WelcomeScreen() {
             loading={busy === 'new'}
             title={t('welcome.new')}
             description={t('welcome.newDescription')}
+          />
+          <PrimaryAction
+            onClick={() => setDownloadSourceOpen(true)}
+            disabled={!!busy}
+            loading={busy === 'import'}
+            title="Tải từ nguồn mạng"
+            description="Tìm kiếm manga trực tuyến và tự động tạo dự án để tải xuống"
           />
           <SecondaryAction
             onClick={importKhr}
@@ -227,6 +243,11 @@ export function WelcomeScreen() {
         busy={busy === 'new'}
       />
 
+      <DownloadSourceDialog
+        open={downloadSourceOpen}
+        onOpenChange={setDownloadSourceOpen}
+      />
+
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
@@ -257,12 +278,14 @@ function PrimaryAction({
   loading,
   title,
   description,
+  icon,
 }: {
   onClick: () => void
   disabled?: boolean
   loading?: boolean
   title: string
   description: string
+  icon?: React.ReactNode
 }) {
   return (
     <button
@@ -283,7 +306,7 @@ function PrimaryAction({
         )}
       >
         <div className='flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm shadow-primary/30'>
-          <PlusIcon className='h-4 w-4' />
+          {icon || <PlusIcon className='h-4 w-4' />}
         </div>
         <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
           <div className='text-base leading-tight font-semibold tracking-tight text-foreground'>
@@ -364,41 +387,76 @@ function ProjectRow({
   disabled?: boolean
 }) {
   const when = project.updatedAtMs && project.updatedAtMs > 0 ? new Date(project.updatedAtMs) : null
-  return (
-    <li className='group/row relative flex items-center justify-between hover:bg-muted/40'>
+
+  const displayName = project.name.length > 25 ? project.name.slice(0, 22) + '...' : project.name;
+  const displayId = project.id.length > 25 ? project.id.slice(0, 22) + '...' : project.id;
+
+  const content = (
+    <li className='group/row relative flex w-full items-center justify-between overflow-hidden hover:bg-muted/40 pr-3 py-1'>
       <button
         type='button'
         onClick={() => onOpen(project.id)}
         disabled={disabled}
-        className='flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60'
+        className='flex min-w-0 flex-1 cursor-pointer items-center gap-3 pl-4 pr-2 py-3 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60'
       >
-        <div className='flex min-w-0 flex-1 flex-col'>
-          <div className='truncate text-sm font-medium text-foreground'>{project.name}</div>
-          <div className='truncate text-[11px] text-muted-foreground'>{project.id}</div>
+        <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
+          <div className='truncate text-sm font-semibold text-foreground' title={project.name}>{displayName}</div>
+          <div className='truncate text-[11px] text-muted-foreground/80 font-mono' title={project.id}>{displayId}</div>
         </div>
         {when && (
-          <div className='mr-2 flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground group-hover/row:mr-12 transition-all duration-200'>
+          <div className='flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/80 mr-2 bg-muted/30 px-2 py-0.5 rounded-md'>
             <ClockIcon className='h-3 w-3' />
             {formatRelative(when)}
           </div>
         )}
       </button>
       {onDelete && (
-        <Button
-          variant='ghost'
-          size='icon'
-          className='absolute right-2 shrink-0 h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 cursor-pointer'
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(project.id)
-          }}
-          disabled={disabled}
-          title="Delete Project"
-        >
-          <Trash2Icon className='h-4 w-4' />
-        </Button>
+        <div className='flex shrink-0 items-center justify-center w-12 h-12 z-10'>
+          <Button
+            variant='ghost'
+            size='icon'
+            className='h-10 w-10 text-muted-foreground/60 opacity-35 group-hover/row:opacity-80 hover:!opacity-100 hover:text-destructive hover:bg-destructive/15 transition-all duration-200 cursor-pointer rounded-xl'
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(project.id)
+            }}
+            disabled={disabled}
+            title="Delete Project"
+          >
+            <Trash2Icon className='h-5 w-5' />
+          </Button>
+        </div>
       )}
     </li>
+  );
+
+  if (!onDelete) {
+    return content;
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {content}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44 bg-popover border border-border/80 shadow-md rounded-xl p-1">
+        <ContextMenuItem 
+          onClick={() => onOpen(project.id)} 
+          disabled={disabled}
+          className="text-xs py-1.5 px-2.5 rounded-lg cursor-pointer"
+        >
+          Mở dự án
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => onDelete(project.id)}
+          disabled={disabled}
+          className="text-xs py-1.5 px-2.5 rounded-lg text-destructive focus:text-destructive-foreground focus:bg-destructive cursor-pointer flex items-center"
+        >
+          <Trash2Icon className="mr-2 h-3.5 w-3.5 shrink-0" />
+          Xóa dự án
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

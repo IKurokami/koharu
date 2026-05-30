@@ -129,16 +129,36 @@ async fn create_pages(
     // Optionally clear the project first. Emitted as a batch so it's one undo step.
     let starting_index = if replace {
         let scene = session.scene.read();
-        let remove_ops: Vec<Op> = scene
+        let mut remove_ops: Vec<Op> = scene
             .pages
-            .keys()
-            .copied()
-            .map(|id| Op::RemovePage {
+            .iter()
+            .filter(|(_, p)| {
+                if let Some(cid) = chapter_id {
+                    p.chapter_id == Some(cid)
+                } else {
+                    true
+                }
+            })
+            .map(|(&id, p)| Op::RemovePage {
                 id,
-                prev_page: scene.pages[&id].clone(),
+                prev_page: p.clone(),
                 prev_index: scene.pages.get_index_of(&id).unwrap_or(0),
             })
             .collect();
+
+        // Reverse the remove operations to delete in descending order and avoid index shifting
+        remove_ops.reverse();
+
+        let mut index = None;
+        if chapter_id.is_some() {
+            for (&id, p) in scene.pages.iter() {
+                if p.chapter_id == chapter_id {
+                    index = Some(scene.pages.get_index_of(&id).unwrap_or(0));
+                    break;
+                }
+            }
+        }
+
         drop(scene);
         if !remove_ops.is_empty() {
             app.apply(Op::Batch {
@@ -147,7 +167,9 @@ async fn create_pages(
             })
             .map_err(ApiError::internal)?;
         }
-        0
+
+        let total_pages = session.scene.read().pages.len();
+        index.unwrap_or(total_pages)
     } else {
         at_index.unwrap_or_else(|| session.scene.read().pages.len())
     };
@@ -274,16 +296,36 @@ async fn create_pages_from_paths(
 
     let starting_index = if req.replace {
         let scene = session.scene.read();
-        let remove_ops: Vec<Op> = scene
+        let mut remove_ops: Vec<Op> = scene
             .pages
-            .keys()
-            .copied()
-            .map(|id| Op::RemovePage {
+            .iter()
+            .filter(|(_, p)| {
+                if let Some(cid) = req.chapter_id {
+                    p.chapter_id == Some(cid)
+                } else {
+                    true
+                }
+            })
+            .map(|(&id, p)| Op::RemovePage {
                 id,
-                prev_page: scene.pages[&id].clone(),
+                prev_page: p.clone(),
                 prev_index: scene.pages.get_index_of(&id).unwrap_or(0),
             })
             .collect();
+
+        // Reverse the remove operations to delete in descending order and avoid index shifting
+        remove_ops.reverse();
+
+        let mut index = None;
+        if req.chapter_id.is_some() {
+            for (&id, p) in scene.pages.iter() {
+                if p.chapter_id == req.chapter_id {
+                    index = Some(scene.pages.get_index_of(&id).unwrap_or(0));
+                    break;
+                }
+            }
+        }
+
         drop(scene);
         if !remove_ops.is_empty() {
             app.apply(Op::Batch {
@@ -292,7 +334,9 @@ async fn create_pages_from_paths(
             })
             .map_err(ApiError::internal)?;
         }
-        0
+
+        let total_pages = session.scene.read().pages.len();
+        index.unwrap_or(total_pages)
     } else {
         req.at.unwrap_or_else(|| session.scene.read().pages.len())
     };

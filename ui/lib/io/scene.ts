@@ -11,6 +11,7 @@ import {
   getGetConfigQueryKey,
   getGetCurrentLlmQueryKey,
   getGetSceneJsonQueryKey,
+  getListProjectsQueryKey,
   importDirectory,
   importProject,
   patchConfig,
@@ -49,6 +50,9 @@ import { useSelectionStore } from '@/lib/stores/selectionStore'
 
 export const invalidateScene = () =>
   queryClient.invalidateQueries({ queryKey: getGetSceneJsonQueryKey() })
+
+export const invalidateProjects = () =>
+  queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() })
 
 const invalidateConfig = () => queryClient.invalidateQueries({ queryKey: getGetConfigQueryKey() })
 
@@ -149,17 +153,20 @@ export function selectAllTextNodesOnCurrentPage(): void {
 export async function createAndOpenProject(req: CreateProjectRequest): Promise<ProjectSummary> {
   const summary = await createProject(req)
   await invalidateScene()
+  await invalidateProjects()
   return summary
 }
 
 export async function switchProject(req: OpenProjectRequest): Promise<void> {
   await putCurrentProject(req)
   await invalidateScene()
+  await invalidateProjects()
 }
 
 export async function closeProject(): Promise<void> {
   await deleteCurrentProject()
   await invalidateScene()
+  await invalidateProjects()
 }
 
 // Pages import ---------------------------------------------------------------
@@ -196,12 +203,14 @@ export async function uploadPagesByPaths(paths: string[], replace: boolean, at?:
 export async function uploadKhrArchive(file: File): Promise<ProjectSummary> {
   const summary = await importProject(file)
   await invalidateScene()
+  await invalidateProjects()
   return summary
 }
 
 export async function importFolderAsProject(req: ImportDirectoryRequest): Promise<ProjectSummary> {
   const summary = await importDirectory(req)
   await invalidateScene()
+  await invalidateProjects()
   return summary
 }
 
@@ -260,4 +269,5 @@ export async function deleteProjectById(id: string): Promise<void> {
   if (!res.ok) {
     throw new Error(`Failed to delete project: ${res.statusText}`)
   }
+  await invalidateProjects()
 }

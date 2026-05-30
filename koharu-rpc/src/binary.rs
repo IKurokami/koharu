@@ -41,6 +41,7 @@ async fn get_scene_json(State(app): State<AppState>) -> ApiResult<Json<SceneSnap
     let session = app
         .current_session()
         .ok_or_else(|| ApiError::bad_request("no project open"))?;
+    let _ = auto_detect_new_chapters(&session);
     let scene = session.scene.read().clone();
     let epoch = session.epoch();
     Ok(Json(SceneSnapshot { epoch, scene }))
@@ -61,6 +62,7 @@ async fn get_scene_bin(State(app): State<AppState>) -> ApiResult<Response> {
     let session = app
         .current_session()
         .ok_or_else(|| ApiError::bad_request("no project open"))?;
+    let _ = auto_detect_new_chapters(&session);
     let (epoch, bytes) = {
         let scene = session.scene.read();
         let epoch = session.epoch();
@@ -176,4 +178,163 @@ fn webp_response(bytes: Vec<u8>) -> Response {
     resp.headers_mut()
         .insert(CONTENT_TYPE, HeaderValue::from_static("image/webp"));
     resp.into_response()
+}
+
+pub fn auto_detect_new_chapters(session: &std::sync::Arc<koharu_app::ProjectSession>) -> anyhow::Result<()> {
+    let sync_dir = {
+        let scene = session.scene.read();
+        scene.project.sync_dir.clone()
+    };
+    let Some(sync_path_str) = sync_dir else {
+        return Ok(());
+    };
+    let import_path = std::path::Path::new(&sync_path_str);
+    if !import_path.is_dir() {
+        return Ok(());
+    }
+
+    // List existing chapter names
+    let existing_names: std::collections::HashSet<String> = {
+        let scene = session.scene.read();
+        scene.chapters.values().map(|c| c.name.clone()).collect()
+    };
+
+    // Scan subdirectories
+    let mut new_chapter_dirs = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(import_path) {
+        for entry in entries.flatten() {
+            if let Ok(ftype) = entry.file_type() {
+                if ftype.is_dir() {
+                    let dir_path = entry.path();
+                    if let Some(name) = dir_path.file_name().and_then(|s| s.to_str()) {
+                        if !existing_names.contains(name) {
+                            new_chapter_dirs.push(dir_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if new_chapter_dirs.is_empty() {
+        return Ok(());
+    }
+
+    // Sort naturally
+    new_chapter_dirs.sort_by(|a, b| {
+        let af = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let bf = b.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        natord::compare(af, bf)
+    });
+
+    for chapter_path in new_chapter_dirs {
+        let chapter_name = chapter_path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Untitled Chapter")
+            .to_string();
+
+        let chapter_id = koharu_core::ChapterId::new();
+        let now = chrono::Utc::now();
+        
+        let order = {
+            let scene = session.scene.read();
+            scene.chapters.len() as u32
+        };
+
+        let chapter = koharu_core::Chapter {
+            id: chapter_id,
+            name: chapter_name.clone(),
+            order,
+            created_at: now,
+            updated_at: now,
+            page_ids: Vec::new(),
+        };
+
+        // Apply chapter addition immediately so page additions can reference the chapter
+        session.apply(koharu_core::Op::AddChapter { chapter })?;
+
+        let raw_dir = chapter_path.join("raw");
+        let psd_dir = chapter_path.join("psd");
+        let trans_dir = chapter_path.join("translated").join("vi-Vn");
+        let _ = std::fs::create_dir_all(&raw_dir);
+        let _ = std::fs::create_dir_all(&psd_dir);
+        let _ = std::fs::create_dir_all(&trans_dir);
+
+        let mut raw_files = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&raw_dir) {
+            for entry in entries.flatten() {
+                if let Ok(ftype) = entry.file_type() {
+                    if ftype.is_file() {
+                        let path = entry.path();
+                        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                            let ext_lower = ext.to_lowercase();
+                            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" || ext_lower == "webp" {
+                                raw_files.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        raw_files.sort_by(|a, b| {
+            let af = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            let bf = b.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            natord::compare(af, bf)
+        });
+
+        let blobs = session.blobs.clone();
+        let starting_index = {
+            let scene = session.scene.read();
+            scene.pages.len()
+        };
+
+        let mut page_ops = Vec::new();
+        for (i, file_path) in raw_files.into_iter().enumerate() {
+            if let Ok(bytes) = std::fs::read(&file_path) {
+                if let Ok(img) = image::load_from_memory(&bytes) {
+                    let (w, h) = img.dimensions();
+                    let filename = file_path.file_name().and_then(|s| s.to_str()).unwrap_or("image.png").to_string();
+                    if let Ok(blob) = blobs.put_bytes(&bytes) {
+                        let mut page = koharu_core::Page::new(&filename, w, h);
+                        page.chapter_id = Some(chapter_id);
+
+                        let source_node_id = koharu_core::NodeId::new();
+                        page.nodes.insert(
+                            source_node_id,
+                            koharu_core::Node {
+                                id: source_node_id,
+                                transform: koharu_core::Transform::default(),
+                                visible: true,
+                                kind: koharu_core::NodeKind::Image(koharu_core::ImageData {
+                                    role: koharu_core::ImageRole::Source,
+                                    blob,
+                                    opacity: 1.0,
+                                    natural_width: w,
+                                    natural_height: h,
+                                    name: Some(filename),
+                                }),
+                            },
+                        );
+
+                        page_ops.push(koharu_core::Op::AddPage {
+                            page,
+                            at: starting_index + i,
+                        });
+                    }
+                }
+            }
+        }
+
+        if !page_ops.is_empty() {
+            session.apply(koharu_core::Op::Batch {
+                ops: page_ops,
+                label: format!("Import pages for chapter {chapter_name}"),
+            })?;
+        }
+    }
+
+    // Save project scene.bin
+    session.compact()?;
+    Ok(())
 }
