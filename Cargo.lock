@@ -4498,6 +4498,7 @@ dependencies = [
  "koharu-psd",
  "koharu-runtime",
  "natord",
+ "percent-encoding",
  "postcard",
  "rayon",
  "reqwest 0.13.3",
@@ -4507,12 +4508,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
+ "toml 1.1.2+spec-1.1.0",
  "tower-http",
  "tracing",
  "url",
  "utoipa",
  "utoipa-axum",
  "uuid",
+ "zip 8.6.0",
 ]
 
 [[package]]

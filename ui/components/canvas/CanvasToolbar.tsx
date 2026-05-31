@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { textNodesOf } from '@/hooks/useCurrentPage'
+import { useScene } from '@/hooks/useScene'
 import {
   deleteCurrentLlm,
   getConfig,
@@ -34,15 +36,13 @@ import {
   useGetCurrentLlm,
 } from '@/lib/api/default/default'
 import type { LlmCatalog, LlmCatalogModel, LlmProviderCatalog, LlmTarget } from '@/lib/api/schemas'
+import type { Op } from '@/lib/api/schemas'
+import { applyOp, queueAutoRender } from '@/lib/io/scene'
+import { ops } from '@/lib/ops'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
 import { useJobsStore } from '@/lib/stores/jobsStore'
 import { usePreferencesStore } from '@/lib/stores/preferencesStore'
 import { useSelectionStore } from '@/lib/stores/selectionStore'
-import { textNodesOf } from '@/hooks/useCurrentPage'
-import { useScene } from '@/hooks/useScene'
-import { applyOp, queueAutoRender } from '@/lib/io/scene'
-import { ops } from '@/lib/ops'
-import type { Op } from '@/lib/api/schemas'
 
 // ---------------------------------------------------------------------------
 // Helpers (inlined from former llmTargets util)
@@ -76,6 +76,7 @@ const flattenCatalogModels = (catalog?: LlmCatalog): SelectableLlmModel[] => [
 
 export function CanvasToolbar() {
   const setWebtoonPreviewOpen = useEditorUiStore((s) => s.setWebtoonPreviewOpen)
+  const { t } = useTranslation()
   return (
     <div className='flex items-center gap-2 border-b border-border/60 bg-card px-3 py-2 text-xs text-foreground'>
       <WorkflowButtons />
@@ -83,11 +84,11 @@ export function CanvasToolbar() {
       <Button
         variant='outline'
         size='xs'
-        className='gap-1.5 font-medium hover:bg-accent/80 hover:text-accent-foreground border-border/60 transition-all duration-200'
+        className='gap-1.5 border-border/60 font-medium transition-all duration-200 hover:bg-accent/80 hover:text-accent-foreground'
         onClick={() => setWebtoonPreviewOpen(true)}
       >
         <BookOpenIcon className='size-3.5' />
-        Webtoon Preview
+        {t('webtoon.preview')}
       </Button>
       <TranslationToolPopover />
       <LlmStatusPopover />
@@ -361,7 +362,7 @@ function LlmStatusPopover() {
                 : {}
             }
           />
-          LLM
+          {t('llm.title')}
         </button>
       </PopoverTrigger>
       <PopoverContent align='end' className='w-[280px] p-0' data-testid='llm-popover'>
@@ -460,12 +461,12 @@ function TranslationToolPopover() {
             sprite: null,
             spriteTransform: null,
             renderedDirection: null,
-          }
-        } as never
-      })
+          },
+        } as never,
+      }),
     )
     if (clearOps.length > 0) {
-      await applyOp(ops.batch("Clear page translation", clearOps))
+      await applyOp(ops.batch(t('canvas.toolbar.clearPageTranslationOp'), clearOps))
       queueAutoRender(pageId)
     }
   }
@@ -496,9 +497,7 @@ function TranslationToolPopover() {
     if (!currentPage) return
     const currentChapterId = currentPage.chapterId
 
-    const chapterPages = Object.values(scene.pages).filter(
-      (p) => p.chapterId === currentChapterId
-    )
+    const chapterPages = Object.values(scene.pages).filter((p) => p.chapterId === currentChapterId)
 
     const clearOps = chapterPages.flatMap((p) =>
       textNodesOf(p).map((node) =>
@@ -509,14 +508,14 @@ function TranslationToolPopover() {
               sprite: null,
               spriteTransform: null,
               renderedDirection: null,
-            }
-          } as never
-        })
-      )
+            },
+          } as never,
+        }),
+      ),
     )
 
     if (clearOps.length > 0) {
-      await applyOp(ops.batch("Clear chapter translation", clearOps))
+      await applyOp(ops.batch(t('canvas.toolbar.clearChapterTranslationOp'), clearOps))
       queueAutoRender(pageId)
     }
   }
@@ -527,9 +526,7 @@ function TranslationToolPopover() {
     if (!currentPage) return
     const currentChapterId = currentPage.chapterId
 
-    const chapterPages = Object.values(scene.pages).filter(
-      (p) => p.chapterId === currentChapterId
-    )
+    const chapterPages = Object.values(scene.pages).filter((p) => p.chapterId === currentChapterId)
     const chapterPageIds = chapterPages.map((p) => p.id)
 
     await handleClearChapter()
@@ -556,24 +553,26 @@ function TranslationToolPopover() {
       <PopoverTrigger asChild>
         <button
           data-testid='translation-tool-trigger'
-          className='flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium shadow-sm bg-muted text-muted-foreground ring-1 ring-border/50 transition hover:opacity-80'
+          className='flex h-6 cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 text-[11px] font-medium text-muted-foreground shadow-sm ring-1 ring-border/50 transition hover:opacity-80'
         >
           <LanguagesIcon className='size-3.5' />
           {t('canvas.toolbar.translationTool')}
         </button>
       </PopoverTrigger>
       <PopoverContent align='end' className='w-[280px] p-0' data-testid='translation-tool-popover'>
-        <div className='flex flex-col gap-1.5 px-3 pt-2 pb-3 bg-muted/20'>
+        <div className='flex flex-col gap-1.5 bg-muted/20 px-3 pt-2 pb-3'>
           <span className='text-[10px] font-medium text-muted-foreground uppercase'>
             {t('canvas.toolbar.translationTool')}
           </span>
           <div className='flex flex-col gap-2'>
             <div className='flex items-center gap-1.5'>
-              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>{t('canvas.toolbar.pageLabel')}:</span>
+              <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                {t('canvas.toolbar.pageLabel')}:
+              </span>
               <Button
                 variant='outline'
                 size='xs'
-                className='flex-1 h-6 text-[10px] px-1'
+                className='h-6 flex-1 px-1 text-[10px]'
                 disabled={!pageId || isProcessing}
                 onClick={handleClearPage}
               >
@@ -582,7 +581,7 @@ function TranslationToolPopover() {
               <Button
                 variant='default'
                 size='xs'
-                className='flex-1 h-6 text-[10px] px-1'
+                className='h-6 flex-1 px-1 text-[10px]'
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslatePage}
               >
@@ -590,11 +589,13 @@ function TranslationToolPopover() {
               </Button>
             </div>
             <div className='flex items-center gap-1.5'>
-              <span className='text-[10px] font-medium text-muted-foreground min-w-[50px] shrink-0'>{t('canvas.toolbar.chapterLabel')}:</span>
+              <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                {t('canvas.toolbar.chapterLabel')}:
+              </span>
               <Button
                 variant='outline'
                 size='xs'
-                className='flex-1 h-6 text-[10px] px-1'
+                className='h-6 flex-1 px-1 text-[10px]'
                 disabled={!pageId || isProcessing}
                 onClick={handleClearChapter}
               >
@@ -603,7 +604,7 @@ function TranslationToolPopover() {
               <Button
                 variant='default'
                 size='xs'
-                className='flex-1 h-6 text-[10px] px-1'
+                className='h-6 flex-1 px-1 text-[10px]'
                 disabled={!pageId || !llmReady || isProcessing}
                 onClick={handleRetranslateChapter}
               >

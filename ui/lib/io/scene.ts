@@ -271,3 +271,15 @@ export async function deleteProjectById(id: string): Promise<void> {
   }
   await invalidateProjects()
 }
+
+export async function renameProjectById(id: string, name: string): Promise<void> {
+  const res = await fetch(`/api/v1/projects/${id}/name`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to rename project: ${res.statusText}`)
+  }
+  await invalidateProjects()
+}

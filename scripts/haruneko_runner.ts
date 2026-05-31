@@ -1,3 +1,20 @@
+import { plugin } from "bun";
+
+const webpPlugin = {
+  name: "webp-loader",
+  setup(build: any) {
+    build.onLoad({ filter: /\.(webp|png|jpg|jpeg|gif)$/ }, () => {
+      return {
+        contents: "export default '';",
+        loader: "js",
+      };
+    });
+  },
+};
+
+plugin(webpPlugin);
+(globalThis as any).webpPlugin = webpPlugin; // Force bundler to preserve the plugin and not tree-shake it
+
 import { parseHTML } from 'linkedom';
 import { join } from 'path';
 
@@ -22,6 +39,63 @@ for (const prop of urlProperties) {
         enumerable: true
     });
 }
+
+const pendingPromises: Promise<any>[] = [];
+(globalThis as any).pendingPromises = pendingPromises;
+
+// Patch HTMLElement.prototype.dispatchEvent to support HTMX trigger/hx-get actions
+const originalDispatchEvent = HTMLElement.prototype.dispatchEvent;
+HTMLElement.prototype.dispatchEvent = function(event: any) {
+    const hxGet = this.getAttribute('hx-get');
+    const hxTrigger = this.getAttribute('hx-trigger');
+    if (hxGet && hxTrigger && event.type === hxTrigger.trim()) {
+        const url = hxGet.trim().replace(/&amp;/g, '&').replace(/&#038;/g, '&');
+        const p = fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => res.text())
+        .then(html => {
+            const swap = this.getAttribute('hx-swap') || 'innerHTML';
+            if (swap === 'outerHTML') {
+                const parent = this.parentNode;
+                if (parent) {
+                    const temp = document.createElement('div');
+                    temp.innerHTML = html.trim();
+                    const newEl = Array.from(temp.childNodes).find((n: any) => n.nodeType === 1);
+                    if (newEl) {
+                        parent.replaceChild(newEl, this);
+                    }
+                }
+            } else {
+                this.innerHTML = html.trim();
+            }
+        })
+        .catch(err => {
+            console.error("HTMX hx-get dispatch fetch failed:", err);
+        });
+        pendingPromises.push(p);
+    }
+    return originalDispatchEvent.call(this, event);
+};
+
+// Patch globalThis.setTimeout to wait for pending HTMX fetches before running the callback
+const originalSetTimeout = globalThis.setTimeout;
+(globalThis as any).setTimeout = function(callback: any, delay: any, ...args: any[]) {
+    if (pendingPromises.length > 0) {
+        const promises = [...pendingPromises];
+        pendingPromises.length = 0; // Clear it
+        Promise.all(promises).then(() => {
+            originalSetTimeout(callback, 50, ...args);
+        }).catch(() => {
+            originalSetTimeout(callback, 50, ...args);
+        });
+        return 999;
+    }
+    return originalSetTimeout(callback, delay, ...args);
+} as any;
 
 globalThis.window = window as any;
 globalThis.document = document as any;
@@ -66,7 +140,33 @@ if (command === 'find_matching_script') {
     const files = fs.readdirSync(websitesDir);
     let matchedScript: string | null = null;
     
-    for (const file of files) {
+    // Step 1: Pre-filter candidate files statically via fast text scanning (< 2ms)
+    // to avoid compiling all 190+ scraper TS files sequentially which hangs the engine.
+    const candidates: string[] = [];
+    try {
+        const parsedUrl = new URL(url);
+        const host = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+        const domainParts = host.split('.');
+        const domainName = domainParts.length >= 2 ? domainParts[domainParts.length - 2] : host;
+
+        for (const file of files) {
+            if (file.endsWith('.ts') && !file.endsWith('_e2e.ts') && file !== 'haruneko_runner.ts' && file !== 'NatsuID.ts') {
+                const fullPath = join(websitesDir, file);
+                const content = fs.readFileSync(fullPath, 'utf8').toLowerCase();
+                
+                // Check if file mentions the host or the specific domain name
+                if (content.includes(host) || content.includes(`'${domainName}'`) || content.includes(`"${domainName}"`)) {
+                    candidates.push(file);
+                }
+            }
+        }
+    } catch (e) {
+        // Fallback to all files if URL parse fails
+    }
+
+    const filesToSearch = candidates.length > 0 ? candidates : files;
+    
+    for (const file of filesToSearch) {
         if (file.endsWith('.ts') && !file.endsWith('_e2e.ts') && file !== 'haruneko_runner.ts') {
             try {
                 const fullPath = join(websitesDir, file);

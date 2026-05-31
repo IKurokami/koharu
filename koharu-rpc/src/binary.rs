@@ -29,7 +29,7 @@ pub fn router() -> OpenApiRouter<AppState> {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct SceneSnapshot {
     pub epoch: u64,
-    pub scene: Scene,
+    pub scene: Option<Scene>,
 }
 
 #[utoipa::path(
@@ -38,13 +38,22 @@ pub struct SceneSnapshot {
     responses((status = 200, body = SceneSnapshot))
 )]
 async fn get_scene_json(State(app): State<AppState>) -> ApiResult<Json<SceneSnapshot>> {
-    let session = app
-        .current_session()
-        .ok_or_else(|| ApiError::bad_request("no project open"))?;
-    let _ = auto_detect_new_chapters(&session);
-    let scene = session.scene.read().clone();
-    let epoch = session.epoch();
-    Ok(Json(SceneSnapshot { epoch, scene }))
+    let session = app.current_session();
+    match session {
+        Some(session) => {
+            let _ = auto_detect_new_chapters(&session);
+            let scene = session.scene.read().clone();
+            let epoch = session.epoch();
+            Ok(Json(SceneSnapshot {
+                epoch,
+                scene: Some(scene),
+            }))
+        }
+        None => Ok(Json(SceneSnapshot {
+            epoch: 0,
+            scene: None,
+        })),
+    }
 }
 
 #[derive(Serialize)]
@@ -180,7 +189,9 @@ fn webp_response(bytes: Vec<u8>) -> Response {
     resp.into_response()
 }
 
-pub fn auto_detect_new_chapters(session: &std::sync::Arc<koharu_app::ProjectSession>) -> anyhow::Result<()> {
+pub fn auto_detect_new_chapters(
+    session: &std::sync::Arc<koharu_app::ProjectSession>,
+) -> anyhow::Result<()> {
     let sync_dir = {
         let scene = session.scene.read();
         scene.project.sync_dir.clone()
@@ -228,14 +239,15 @@ pub fn auto_detect_new_chapters(session: &std::sync::Arc<koharu_app::ProjectSess
     });
 
     for chapter_path in new_chapter_dirs {
-        let chapter_name = chapter_path.file_name()
+        let chapter_name = chapter_path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("Untitled Chapter")
             .to_string();
 
         let chapter_id = koharu_core::ChapterId::new();
         let now = chrono::Utc::now();
-        
+
         let order = {
             let scene = session.scene.read();
             scene.chapters.len() as u32
@@ -268,7 +280,11 @@ pub fn auto_detect_new_chapters(session: &std::sync::Arc<koharu_app::ProjectSess
                         let path = entry.path();
                         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                             let ext_lower = ext.to_lowercase();
-                            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" || ext_lower == "webp" {
+                            if ext_lower == "png"
+                                || ext_lower == "jpg"
+                                || ext_lower == "jpeg"
+                                || ext_lower == "webp"
+                            {
                                 raw_files.push(path);
                             }
                         }
@@ -294,7 +310,11 @@ pub fn auto_detect_new_chapters(session: &std::sync::Arc<koharu_app::ProjectSess
             if let Ok(bytes) = std::fs::read(&file_path) {
                 if let Ok(img) = image::load_from_memory(&bytes) {
                     let (w, h) = img.dimensions();
-                    let filename = file_path.file_name().and_then(|s| s.to_str()).unwrap_or("image.png").to_string();
+                    let filename = file_path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("image.png")
+                        .to_string();
                     if let Ok(blob) = blobs.put_bytes(&bytes) {
                         let mut page = koharu_core::Page::new(&filename, w, h);
                         page.chapter_id = Some(chapter_id);

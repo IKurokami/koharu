@@ -162,7 +162,9 @@ function PageCard({
   name?: string
   dragging?: boolean
 }) {
+  const { t } = useTranslation()
   const src = `${getGetPageThumbnailUrl(id)}?size=${200 * THUMBNAIL_DPR}`
+  const fallbackName = t('navigator.pageLabel', { number: index + 1 })
   return (
     <div
       data-testid={`page-manager-card-${index}`}
@@ -173,16 +175,16 @@ function PageCard({
       <div className='flex aspect-3/4 w-full items-center justify-center overflow-hidden rounded'>
         <img
           src={src}
-          alt={name ?? `Page ${index + 1}`}
+          alt={name ?? fallbackName}
           loading='lazy'
           draggable={false}
           className='max-h-full max-w-full rounded object-contain'
         />
       </div>
-      <div className='flex w-full items-center justify-center gap-1 text-xs text-muted-foreground px-1 min-w-0'>
+      <div className='flex w-full min-w-0 items-center justify-center gap-1 px-1 text-xs text-muted-foreground'>
         <GripVerticalIcon className='h-3.5 w-3.5 shrink-0' />
-        <span className='font-semibold text-foreground truncate' title={name || `Page ${index + 1}`}>
-          {index + 1}. {name || `Page ${index + 1}`}
+        <span className='truncate font-semibold text-foreground' title={name || fallbackName}>
+          {index + 1}. {name || fallbackName}
         </span>
       </div>
     </div>

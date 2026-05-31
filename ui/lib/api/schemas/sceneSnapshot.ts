@@ -11,5 +11,5 @@ import type { Scene } from './scene';
 export interface SceneSnapshot {
   /** @minimum 0 */
   epoch: number;
-  scene: Scene;
+  scene?: null | Scene;
 }

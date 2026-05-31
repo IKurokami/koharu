@@ -56,9 +56,10 @@ export function CloneHaruNekoDialog({ open, onOpenChange }: CloneHaruNekoDialogP
         setError(res.message || t('haruneko.syncFailed'))
         setCloningStatus('idle')
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
-      setError(e instanceof Error ? e.message : t('haruneko.syncConnectionError'))
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || t('haruneko.syncConnectionError'))
       setCloningStatus('idle')
     }
   }

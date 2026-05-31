@@ -3,8 +3,10 @@
     "ui/"
   ],
   "scripts": {
-    "dev": "bun run scripts/dev.ts tauri dev -- --profile=release-with-debug",
-    "build": "bun run scripts/dev.ts tauri build --no-bundle",
+    "dev": "bun run scripts/dev.ts tauri dev",
+    "dev:optimized": "bun run scripts/dev.ts tauri dev -- --profile=release-with-debug",
+    "build": "bun run scripts/dev.ts tauri build --no-bundle -- --profile=release-fast",
+    "build:release": "bun run scripts/dev.ts tauri build --no-bundle",
     "cargo": "bun run scripts/dev.ts cargo",
     "lint:ui": "bun run --filter ui lint",
     "test:ui": "bun run --filter ui test",
@@ -13,13 +15,13 @@
     "generate:openapi": "cargo run -p koharu-rpc --bin openapi -- ui/openapi.json",
     "generate:client": "openapi-generator-cli generate -i ui/openapi.json -g rust -o tests/integration-tests/client --package-name koharu-client --additional-properties=library=reqwest,supportAsync=true,preferUnsignedInt=true,packageVersion=0.0.0"
   },
+  "dependencies": {
+    "linkedom": "^0.18.12"
+  },
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.34.0",
     "@tauri-apps/cli": "^2.11.2",
     "git-cliff": "^2.13.1",
     "oxfmt": "^0.49.0"
-  },
-  "dependencies": {
-    "linkedom": "^0.18.12"
   }
 }

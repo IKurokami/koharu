@@ -58,7 +58,7 @@ export function SubToolRail() {
                   <Input
                     value={localSize}
                     readOnly
-                    aria-label='Brush size value'
+                    aria-label={t('toolbar.brushSizeValue')}
                     className='h-8 w-11 border-border/50 bg-muted/20 px-1 text-center text-[11px]'
                   />
                   <span

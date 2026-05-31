@@ -12,6 +12,10 @@ export interface ProjectSummary {
   /** Absolute filesystem path. Informational; clients never need to pass
    * it back in — they use `id`. */
   path: string;
+  /** @nullable */
+  projectType?: string | null;
+  /** @nullable */
+  syncDir?: string | null;
   /**
      * Last modification time of the project directory on disk (ms since
    * UNIX epoch). Used for "recent projects" ordering.

@@ -52,7 +52,11 @@ async fn apply_command(
             if let Some(sync_dir) = sync_dir {
                 // Build a lookup of chapter_id -> chapter_name
                 let chapter_names: std::collections::HashMap<koharu_core::ChapterId, String> =
-                    scene.chapters.iter().map(|(id, ch)| (*id, ch.name.clone())).collect();
+                    scene
+                        .chapters
+                        .iter()
+                        .map(|(id, ch)| (*id, ch.name.clone()))
+                        .collect();
                 let mut names = Vec::new();
                 collect_removed_chapter_names(&op, &chapter_names, &mut names);
                 if !names.is_empty() {

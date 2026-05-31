@@ -163,7 +163,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).unwrap();
 
-        // Build a fake project.
+        // Build a temporary project fixture.
         let proj = root.join("proj.khrproj");
         std::fs::create_dir_all(proj.join("blobs/ab").as_std_path()).unwrap();
         std::fs::create_dir_all(proj.join("cache").as_std_path()).unwrap();

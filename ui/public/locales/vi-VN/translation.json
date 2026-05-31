@@ -9,6 +9,8 @@
     "saved": "Đã lưu!",
     "delete": "Xóa",
     "close": "Đóng",
+    "retry": "Thử lại",
+    "create": "Tạo",
     "error": "Lỗi"
   },
   "menu": {
@@ -31,6 +33,8 @@
     "exportPsd": "Xuất PSD...",
     "exportAllInpainted": "Xuất tất cả ảnh đã xóa chữ...",
     "exportAllRendered": "Xuất tất cả ảnh đã dựng chữ...",
+    "exportPsdSub": "Xuất PSD",
+    "exportAllImages": "Xuất tất cả ảnh",
     "view": "Xem",
     "fitWindow": "Vừa cửa sổ",
     "originalSize": "Kích thước gốc",
@@ -68,6 +72,10 @@
     "importKhr": "Nhập tệp .khr",
     "importFolder": "Nhập từ thư mục",
     "projects": "Gần đây",
+    "allProjects": "Tất cả dự án",
+    "manualProjects": "Tạo thủ công",
+    "importedProjects": "Import thư mục",
+    "downloadedProjects": "Tải từ mạng",
     "emptyHint": "Các dự án gần đây sẽ xuất hiện tại đây",
     "newDialogTitle": "Dự án mới",
     "newDialogDescription": "Đặt tên cho dự án. Dự án sẽ được lưu trong thư mục dự án do ứng dụng quản lý.",
@@ -82,6 +90,12 @@
     "newProjectSubtitle": "Tạo dự án mới hoặc nhập tệp để bắt đầu",
     "openProject": "Mở dự án",
     "deleteProject": "Xóa dự án",
+    "renameProject": "Sửa tên dự án",
+    "renameProjectDescription": "Nhập tên mới cho dự án này.",
+    "openFolder": "Mở thư mục",
+    "emptyTitle": "Chào mừng đến với Koharu",
+    "emptyDescription": "Tạo dự án mới để bắt đầu từ đầu.\nMở dự án có sẵn trên ổ đĩa hoặc tải từ web.",
+    "renameFailed": "Đổi tên thất bại: {{message}}",
     "time": {
       "justNow": "vừa xong",
       "minutes": "{{count}} phút trước",
@@ -112,6 +126,18 @@
     "pages_other": "{{count}} trang",
     "empty": "Chưa có tài liệu",
     "prompt": "Chọn hoặc nhập một trang để bắt đầu",
+    "selectChapter": "Chọn chapter",
+    "allChapters": "Tất cả chapter",
+    "defaultChapterName": "Chapter {{number}}",
+    "createChapter": "Tạo chapter mới",
+    "createChapterDescription": "Tạo chapter mới để nhóm và tách riêng các trang truyện.",
+    "createChapterPlaceholder": "ví dụ: Chapter 1: Cuộc phiêu lưu bắt đầu",
+    "downloadChapter": "Tải chapter từ web",
+    "deleteSelectedChapter": "Xóa chapter đang chọn",
+    "pageLabel": "Trang {{number}}",
+    "deletePage": "Xóa trang",
+    "insertPageBefore": "Chèn trang phía trước",
+    "insertPageAfter": "Chèn trang phía sau",
     "pageManager": {
       "title": "Quản lý trang",
       "description": "Kéo thả trang để sắp xếp lại."
@@ -139,7 +165,8 @@
     "brush": "Lớp cọ",
     "inpainted": "Ảnh đã xóa chữ",
     "mask": "Mặt nạ phân đoạn",
-    "base": "Ảnh gốc"
+    "base": "Ảnh gốc",
+    "rawBadge": "RAW"
   },
   "processing": {
     "detect": "Phát hiện",
@@ -258,6 +285,12 @@
     "fontPlaceholder": "Chọn phông chữ",
     "fontColorLabel": "Màu chữ",
     "fontSizeLabel": "Cỡ chữ",
+    "autoPlaceholder": "tự động",
+    "multiBlockStyleUpdate": "Cập nhật kiểu cho nhiều khối",
+    "bulkStyleUpdate": "Cập nhật kiểu hàng loạt",
+    "explicitFontColorUpdate": "Cập nhật màu chữ cụ thể",
+    "googleFontSource": "Google",
+    "systemFontSource": "Hệ thống",
     "fontStylePlaceholder": "Kiểu",
     "fontScopeGlobal": "Toàn cục",
     "fontScopeBlock": "Theo khối",
@@ -308,6 +341,7 @@
     "brush": "Cọ",
     "eraser": "Tẩy",
     "brushSize": "Cỡ cọ",
+    "brushSizeValue": "Giá trị cỡ cọ",
     "brushColor": "Màu cọ"
   },
   "toolRail": {
@@ -323,6 +357,11 @@
   "errors": {
     "title": "Lỗi",
     "dismiss": "Đóng",
+    "unexpected": "Lỗi không xác định",
+    "somethingWentWrong": "Đã xảy ra lỗi.",
+    "resetSelection": "Đặt lại lựa chọn",
+    "resetQueryCache": "Đặt lại cache truy vấn",
+    "noCurrentPageSelected": "Chưa chọn trang hiện tại",
     "providerQuotaExceeded": "Đã vượt hạn mức API của {{provider}}. Kiểm tra thanh toán hoặc chờ hạn mức được đặt lại.",
     "providerApiKeyRequired": "Cần API key của {{provider}}.",
     "providerBaseUrlRequired": "Cần Base URL của {{provider}}.",
@@ -441,6 +480,12 @@
     "restartApply": "Áp dụng & khởi động lại",
     "restartApplying": "Đang áp dụng...",
     "restartRequiredDescription": "Các cài đặt này được tải khi khởi động. Áp dụng sẽ lưu cấu hình và khởi động lại ứng dụng.",
+    "storageRequired": "Bắt buộc",
+    "invalidHttpConnectTimeout": "Thời gian chờ kết nối HTTP không hợp lệ",
+    "invalidHttpReadTimeout": "Thời gian chờ đọc HTTP không hợp lệ",
+    "invalidHttpMaxRetries": "Số lần thử lại HTTP không hợp lệ",
+    "storageSaveFailed": "Lưu thất bại",
+    "restartManually": "Hãy khởi động lại thủ công",
     "engines": "Engine",
     "enginesDescription": "Chọn engine ML dùng cho từng bước pipeline.",
     "detector": "Bộ phát hiện",
@@ -456,6 +501,7 @@
     "shortcutIncreaseBrushSize": "Tăng cỡ cọ",
     "shortcutDecreaseBrushSize": "Giảm cỡ cọ",
     "shortcutPressKey": "Nhấn một phím...",
+    "shortcutNone": "KHÔNG CÓ",
     "shortcutReset": "Đặt lại phím tắt",
     "shortcutResetDescription": "Thao tác này sẽ khôi phục tất cả phím tắt về mặc định. Các thay đổi đã lưu sẽ bị mất.",
     "shortcutConflict": "Tổ hợp phím đã được dùng",
@@ -482,14 +528,14 @@
   },
   "haruneko": {
     "syncTitle": "Đồng bộ Scripts HaruNeko",
-    "syncDescription": "Tải xuống và cài đặt toàn bộ các website connector scrapers từ kho HaruNeko vào thư mục hệ thống Koharu.",
+    "syncDescription": "Tải xuống và cài đặt toàn bộ website connector scraper từ HaruNeko vào thư mục hệ thống Koharu.",
     "syncFailed": "Đồng bộ thất bại.",
     "syncConnectionError": "Lỗi kết nối với backend hoặc tiến trình đồng bộ gặp lỗi.",
     "autoSyncTitle": "Đồng bộ Nguồn Truyện Tự Động",
-    "autoSyncDescription": "Koharu sẽ thực hiện Git clone nông tự động và thiết lập các website download scrapers từ HaruNeko trực tiếp vào thư mục dữ liệu ứng dụng của hệ thống để tích hợp sử dụng nhanh chóng.",
+    "autoSyncDescription": "Koharu sẽ tự tải archive connector HaruNeko và các công cụ portable cần thiết vào thư mục dữ liệu ứng dụng.",
     "startSync": "Bắt đầu Đồng bộ & Cài đặt",
     "syncing": "Đang tải và đồng bộ các scripts...",
-    "syncingDescription": "Vui lòng giữ kết nối internet ổn định. Koharu đang tải các scraper files và tích hợp chúng vào hệ thống.",
+    "syncingDescription": "Vui lòng giữ kết nối internet ổn định. Koharu đang tải connector và chuẩn bị runner cục bộ.",
     "syncComplete": "Đồng bộ hoàn tất!",
     "syncSuccessMessage": "Đã cài đặt {{count}} scripts thành công vào hệ thống Koharu.",
     "searchScrapers": "Tìm kiếm các website hỗ trợ...",
@@ -499,7 +545,15 @@
     "newChapter": "Chapter mới",
     "downloadFailed": "Tải chapter thất bại. Vui lòng thử lại.",
     "downloadFromLinkFailed": "Tải chapter từ link thất bại. Vui lòng thử lại.",
+    "batchFailed": "Tải loạt chapter thất bại.",
+    "batchPartialError": "Đã tải xong {{success}} chapter. Có {{failed}} chapter gặp lỗi.",
     "title": "Tải Chapter từ Web",
+    "mangaLabel": "Manga",
+    "selectAllUndownloaded": "Chọn tất cả chưa tải ({{count}})",
+    "unselectAll": "Bỏ chọn hết",
+    "batchDownloading": "Đang tải loạt chapter...",
+    "selectedChapters": "Đã chọn {{count}} chapter",
+    "downloadSelected": "Tải các chapter đã chọn ({{count}})",
     "pasteLinkLabel": "Dán link chương để tải nhanh",
     "pasteLinkPlaceholder": "Dán link chapter (ví dụ: https://nettruyen...)",
     "paste": "Dán",
@@ -532,6 +586,7 @@
     "change": "Thay đổi...",
     "mangaSearchHint": "Nhập từ khóa tìm kiếm để bắt đầu tra cứu truyện tranh trực tuyến từ {{source}}.",
     "searching": "Đang tìm kiếm...",
+    "idLabel": "ID",
     "noDescription": "Không có mô tả.",
     "creating": "Đang tạo...",
     "createProject": "Tạo Project",
@@ -543,9 +598,44 @@
       "translationTool": "Công cụ dịch",
       "retranslate": "Dịch lại",
       "pageLabel": "Trang",
-      "chapterLabel": "Chapter"
+      "chapterLabel": "Chapter",
+      "clearPageTranslationOp": "Xóa bản dịch của trang",
+      "clearChapterTranslationOp": "Xóa bản dịch của chapter"
     },
     "showRenderedImage": "Bản dịch",
     "showInpaintedImage": "Ảnh gốc"
+  },
+  "webtoon": {
+    "preview": "Xem Webtoon",
+    "projectFallback": "Dự án",
+    "noPages": "Không có trang nào trong chapter này",
+    "loadingPage": "Đang tải trang {{number}}...",
+    "failedLoadPage": "Không thể tải trang {{number}}"
+  },
+  "files": {
+    "images": "Ảnh",
+    "koharuArchive": "Tệp Koharu"
+  },
+  "colorPicker": {
+    "hexColorCode": "Mã màu hex",
+    "pick": "Chọn"
+  },
+  "fontSelect": {
+    "searchPlaceholder": "Tìm phông chữ...",
+    "noFontsFound": "Không tìm thấy phông chữ",
+    "categories": {
+      "favorites": "Yêu thích",
+      "all": "Tất cả",
+      "handwriting": "Viết tay",
+      "display": "Display",
+      "sansSerif": "Sans",
+      "serif": "Serif",
+      "monospace": "Mono"
+    }
+  },
+  "llmModelSelect": {
+    "selectPlaceholder": "Chọn mô hình...",
+    "searchPlaceholder": "Tìm mô hình...",
+    "noModelsFound": "Không tìm thấy mô hình"
   }
 }

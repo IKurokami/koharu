@@ -100,6 +100,7 @@ export * from './putMaskParams';
 export * from './putMaskResponse';
 export * from './readingOrder';
 export * from './region';
+export * from './renameProjectRequest';
 export * from './scene';
 export * from './sceneChapters';
 export * from './scenePages';

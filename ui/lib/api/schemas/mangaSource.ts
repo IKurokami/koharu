@@ -6,6 +6,8 @@
 
 export interface MangaSource {
   description: string;
+  /** @nullable */
+  iconUrl?: string | null;
   id: string;
   name: string;
   url: string;

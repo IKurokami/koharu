@@ -105,6 +105,15 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
         };
         let abs = root.join(filename);
         let display = read_project_name(&abs).unwrap_or_else(|| id.to_string());
+        let meta = read_project_meta(&abs);
+        let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+            "downloaded".to_string()
+        } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+            "imported".to_string()
+        } else {
+            "manual".to_string()
+        };
+        let sync_dir = meta.sync_dir.clone();
         let updated_at_ms = entry
             .metadata()
             .ok()
@@ -117,6 +126,8 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
             name: display,
             path: abs.to_string(),
             updated_at_ms,
+            project_type: Some(project_type),
+            sync_dir,
         });
     }
 
@@ -146,6 +157,15 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
                     };
 
                     let display = read_project_name(&path).unwrap_or_else(|| id.clone());
+                    let meta = read_project_meta(&path);
+                    let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+                        "downloaded".to_string()
+                    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+                        "imported".to_string()
+                    } else {
+                        "manual".to_string()
+                    };
+                    let sync_dir = meta.sync_dir.clone();
                     let updated_at_ms = std::fs::metadata(path.as_std_path())
                         .ok()
                         .and_then(|m| m.modified().ok())
@@ -158,6 +178,8 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
                         name: display,
                         path: path.to_string(),
                         updated_at_ms,
+                        project_type: Some(project_type),
+                        sync_dir,
                     });
                 }
 
@@ -270,6 +292,70 @@ fn read_project_name(dir: &Utf8Path) -> Option<String> {
         }
     }
     None
+}
+
+pub fn read_project_meta(dir: &Utf8Path) -> koharu_core::ProjectMeta {
+    // 1. Try scene.bin first
+    let scene_path = dir.join("scene.bin");
+    if scene_path.exists() {
+        if let Ok(bytes) = fs::read(scene_path.as_std_path()) {
+            #[derive(serde::Deserialize)]
+            #[allow(dead_code)]
+            struct MinimalScene {
+                project: koharu_core::ProjectMeta,
+            }
+            #[derive(serde::Deserialize)]
+            #[allow(dead_code)]
+            struct MinimalSnapshot {
+                epoch: u64,
+                scene: MinimalScene,
+            }
+            if let Ok(snap) = postcard::from_bytes::<MinimalSnapshot>(&bytes) {
+                return snap.scene.project;
+            }
+        }
+    }
+
+    // 2. Fallback to project.toml
+    let mut meta = koharu_core::ProjectMeta::default();
+    let toml_path = dir.join("project.toml");
+    let Ok(text) = fs::read_to_string(toml_path.as_std_path()) else {
+        return meta;
+    };
+    
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("name") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                meta.name = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+            }
+        }
+        if trimmed.starts_with("sync_dir") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.sync_dir = Some(val);
+                }
+            }
+        }
+        if trimmed.starts_with("manga_id") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.manga_id = Some(val);
+                }
+            }
+        }
+        if trimmed.starts_with("manga_title") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.manga_title = Some(val);
+                }
+            }
+        }
+    }
+    meta
 }
 
 fn remove_vietnamese_diacritics(input: &str) -> String {

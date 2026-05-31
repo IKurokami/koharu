@@ -181,9 +181,13 @@ ug-cuda = { git = "https://github.com/mayocream/ug", branch = "cuda-dynamic-load
 opt-level = 0
 debug = 1
 split-debuginfo = "unpacked"
+incremental = true
+codegen-units = 256
 
 [profile.dev.build-override]
 opt-level = 0
+debug = 0
+codegen-units = 256
 
 [profile.release]
 opt-level = 3
@@ -196,6 +200,12 @@ panic = "abort"
 [profile.release.build-override]
 opt-level = 0
 
+[profile.release-fast]
+inherits = "release"
+lto = false
+incremental = true
+codegen-units = 256
+
 [profile.dev.package.image]
 opt-level = 3
 
@@ -204,4 +214,8 @@ opt-level = 3
 
 [profile.release-with-debug]
 inherits = "release"
+debug = 1
 debug-assertions = true
+lto = false
+incremental = true
+codegen-units = 256

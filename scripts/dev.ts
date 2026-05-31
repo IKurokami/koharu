@@ -1,8 +1,7 @@
-// @ts-nocheck
+import { exec as execCallback, spawn } from 'node:child_process'
+import { readdir, access, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { readdir, access } from 'node:fs/promises'
-import { exec as execCallback, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const exec = promisify(execCallback)
@@ -93,24 +92,65 @@ async function setupCl() {
   )
 }
 
-async function dev() {
-  if (os.type() === 'Windows_NT') {
-    // First, try to check if nvcc is available
-    await checkNvcc()
-      // If not found, try to set up CUDA paths
-      .catch(async () => {
-        await setupCuda()
-        // Check again after setup
-        await checkNvcc()
-      })
+function shouldSetupCuda(args: string[]) {
+  if (process.env.KOHARU_SETUP_CUDA === '1') return true
+  const featureArgIndex = args.findIndex((arg) => arg === '--features' || arg === '-F')
+  const featureValue = featureArgIndex >= 0 ? args[featureArgIndex + 1] : ''
+  return args.some((arg) => arg === 'cuda' || arg.includes('cuda')) || featureValue.includes('cuda')
+}
 
-    // Setup cl.exe path
-    await setupCl()
+async function shouldBundleRunner(source: string, output: string) {
+  try {
+    const [sourceStat, outputStat] = await Promise.all([stat(source), stat(output)])
+    return sourceStat.mtimeMs > outputStat.mtimeMs
+  } catch {
+    return true
   }
+}
 
+async function checkCl() {
+  try {
+    await exec('where cl.exe', { env: process.env })
+  } catch {
+    throw new Error('cl.exe not found')
+  }
+}
+
+async function dev() {
   const args = process.argv.slice(2)
   if (args.length === 0) {
     throw new Error('No command provided')
+  }
+
+  if (os.type() === 'Windows_NT') {
+    if (shouldSetupCuda(args)) {
+      // First, try to check if nvcc is available
+      await checkNvcc()
+        // If not found, try to set up CUDA paths
+        .catch(async () => {
+          await setupCuda()
+          // Check again after setup
+          await checkNvcc()
+        })
+    }
+
+    // Setup cl.exe path only when it is not already available.
+    await checkCl().catch(setupCl)
+  }
+
+  // Automatically bundle haruneko_runner.ts to haruneko_runner.js to ensure it's up to date for dev and build
+  const runnerSource = path.join('scripts', 'haruneko_runner.ts')
+  const runnerOutput = path.join('scripts', 'haruneko_runner.js')
+  if (await shouldBundleRunner(runnerSource, runnerOutput)) {
+    console.log('Bundling haruneko_runner.ts to haruneko_runner.js...')
+    try {
+      await exec(
+        'bun build scripts/haruneko_runner.ts --outfile=scripts/haruneko_runner.js --target=bun',
+      )
+      console.log('Runner bundled successfully!')
+    } catch (err: any) {
+      console.error('Failed to bundle runner:', err.message || err)
+    }
   }
 
   const proc = spawn(args[0], args.slice(1), {

@@ -256,11 +256,24 @@ pub fn project_summary(session: &ProjectSession) -> koharu_core::ProjectSummary 
         .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
+
+    let meta = session.scene.read().project.clone();
+    let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+        Some("downloaded".to_string())
+    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+        Some("imported".to_string())
+    } else {
+        Some("manual".to_string())
+    };
+    let sync_dir = meta.sync_dir.clone();
+
     koharu_core::ProjectSummary {
         id,
         name: session.scene.read().project.name.clone(),
         path: session.dir.to_string(),
         updated_at_ms,
+        project_type,
+        sync_dir,
     }
 }
 

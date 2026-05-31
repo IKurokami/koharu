@@ -14,13 +14,13 @@ use axum::body::{Body, Bytes};
 use axum::extract::{Path, State};
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
-use koharu_app::projects as project_dirs;
-use koharu_core::{ImageRole, PageId, ProjectSummary};
-use serde::{Deserialize, Serialize};
-use utoipa_axum::{router::OpenApiRouter, routes};
-use rayon::prelude::*;
 use chrono::Utc;
 use image::GenericImageView;
+use koharu_app::projects as project_dirs;
+use koharu_core::{ImageRole, PageId, ProjectSummary};
+use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::AppState;
 use crate::error::{ApiError, ApiResult};
@@ -34,6 +34,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(put_current_project))
         .routes(routes!(delete_current_project))
         .routes(routes!(delete_project_by_id))
+        .routes(routes!(rename_project))
         .routes(routes!(export_current_project))
 }
 
@@ -115,9 +116,7 @@ async fn put_current_project(
 ) -> ApiResult<Json<ProjectSummary>> {
     let config = (**app.config.load()).clone();
     let path = project_dirs::find_recent_project_path(&req.id)
-        .or_else(|| {
-            project_dirs::project_path(&config, &req.id).ok()
-        })
+        .or_else(|| project_dirs::project_path(&config, &req.id).ok())
         .ok_or_else(|| ApiError::bad_request("invalid project id"))?;
     if !path.exists() {
         return Err(ApiError::not_found(format!("project {}", req.id)));
@@ -142,9 +141,7 @@ async fn delete_project_by_id(
 ) -> ApiResult<axum::http::StatusCode> {
     let config = (**app.config.load()).clone();
     let path = project_dirs::find_recent_project_path(&id)
-        .or_else(|| {
-            project_dirs::project_path(&config, &id).ok()
-        })
+        .or_else(|| project_dirs::project_path(&config, &id).ok())
         .ok_or_else(|| ApiError::bad_request("invalid project id"))?;
     if path.exists() {
         if let Some(session) = app.current_session() {
@@ -155,11 +152,115 @@ async fn delete_project_by_id(
         std::fs::remove_dir_all(path.as_std_path())
             .map_err(|e| ApiError::internal(anyhow::Error::new(e)))?;
     }
-    
+
     // Also remove from recent projects!
     let _ = project_dirs::remove_recent_project(&path);
-    
+
     Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+// ---------------------------------------------------------------------------
+// PUT /projects/{id}/name — rename a project
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameProjectRequest {
+    pub name: String,
+}
+
+#[utoipa::path(
+    put,
+    path = "/projects/{id}/name",
+    request_body = RenameProjectRequest,
+    responses((status = 200, body = ProjectSummary))
+)]
+async fn rename_project(
+    State(app): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<RenameProjectRequest>,
+) -> ApiResult<Json<ProjectSummary>> {
+    let trimmed = req.name.trim();
+    if trimmed.is_empty() {
+        return Err(ApiError::bad_request("name must not be empty"));
+    }
+    let config = (**app.config.load()).clone();
+    let path = project_dirs::find_recent_project_path(&id)
+        .or_else(|| project_dirs::project_path(&config, &id).ok())
+        .ok_or_else(|| ApiError::bad_request("invalid project id"))?;
+    if !path.exists() {
+        return Err(ApiError::not_found(format!("project {}", id)));
+    }
+
+    // 1. Update the project.toml
+    let toml_path = path.join("project.toml");
+    if toml_path.exists() {
+        let text = std::fs::read_to_string(toml_path.as_std_path())
+            .map_err(|e| ApiError::internal(anyhow::anyhow!("read project.toml: {e}")))?;
+
+        let mut lines: Vec<String> = Vec::new();
+        let mut name_updated = false;
+        for line in text.lines() {
+            let trimmed_line = line.trim();
+            if trimmed_line.starts_with("name") && trimmed_line.contains('=') {
+                let escaped_name = trimmed.replace('\\', "\\\\").replace('"', "\\\"");
+                lines.push(format!("name = \"{escaped_name}\""));
+                name_updated = true;
+            } else {
+                lines.push(line.to_string());
+            }
+        }
+        if !name_updated {
+            let escaped_name = trimmed.replace('\\', "\\\\").replace('"', "\\\"");
+            lines.insert(0, format!("name = \"{escaped_name}\""));
+        }
+        let new_text = lines.join("\n");
+        std::fs::write(toml_path.as_std_path(), new_text)
+            .map_err(|e| ApiError::internal(anyhow::anyhow!("write project.toml: {e}")))?;
+    }
+
+    // 2. Is the project currently open in the active session?
+    if let Some(session) = app.current_session() {
+        if session.dir == path {
+            // Apply the metadata change in the active session
+            session
+                .apply(koharu_core::Op::UpdateProjectMeta {
+                    patch: koharu_core::ProjectMetaPatch {
+                        name: Some(trimmed.to_string()),
+                        ..Default::default()
+                    },
+                    prev: Default::default(),
+                })
+                .map_err(ApiError::internal)?;
+            session.compact().map_err(ApiError::internal)?;
+        }
+    }
+
+    let updated_at_ms = std::fs::metadata(path.as_std_path())
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
+    let meta = koharu_app::projects::read_project_meta(&path);
+    let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+        "downloaded".to_string()
+    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+        "imported".to_string()
+    } else {
+        "manual".to_string()
+    };
+    let sync_dir = meta.sync_dir.clone();
+
+    Ok(Json(ProjectSummary {
+        id,
+        name: trimmed.to_string(),
+        path: path.to_string(),
+        updated_at_ms,
+        project_type: Some(project_type),
+        sync_dir,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -218,31 +319,41 @@ async fn import_directory(
 ) -> ApiResult<Json<ProjectSummary>> {
     let import_path = std::path::Path::new(&req.path);
     if !import_path.is_dir() {
-        return Err(ApiError::bad_request(format!("Not a valid directory: {}", req.path)));
+        return Err(ApiError::bad_request(format!(
+            "Not a valid directory: {}",
+            req.path
+        )));
     }
 
-    let project_name = import_path.file_name()
+    let project_name = import_path
+        .file_name()
         .and_then(|s| s.to_str())
         .ok_or_else(|| ApiError::bad_request("invalid directory path"))?
         .to_string();
 
     let config = (**app.config.load()).clone();
-    let dest_path = project_dirs::allocate_named(&config, &project_name).map_err(ApiError::internal)?;
-    let session = app.open_project(dest_path, Some(project_name.clone())).await.map_err(ApiError::internal)?;
+    let dest_path =
+        project_dirs::allocate_named(&config, &project_name).map_err(ApiError::internal)?;
+    let session = app
+        .open_project(dest_path, Some(project_name.clone()))
+        .await
+        .map_err(ApiError::internal)?;
 
     // Set sync_dir metadata in ProjectMeta
-    session.apply(koharu_core::Op::UpdateProjectMeta {
-        patch: koharu_core::ProjectMetaPatch {
-            name: None,
-            style: None,
-            updated_at: None,
-            sync_dir: Some(Some(req.path.clone())),
-            source_id: None,
-            manga_id: None,
-            manga_title: None,
-        },
-        prev: Default::default(),
-    }).map_err(ApiError::internal)?;
+    session
+        .apply(koharu_core::Op::UpdateProjectMeta {
+            patch: koharu_core::ProjectMetaPatch {
+                name: None,
+                style: None,
+                updated_at: None,
+                sync_dir: Some(Some(req.path.clone())),
+                source_id: None,
+                manga_id: None,
+                manga_title: None,
+            },
+            prev: Default::default(),
+        })
+        .map_err(ApiError::internal)?;
 
     // List chapters
     let mut chapter_dirs = Vec::new();
@@ -263,7 +374,8 @@ async fn import_directory(
     });
 
     for (ch_idx, chapter_path) in chapter_dirs.into_iter().enumerate() {
-        let chapter_name = chapter_path.file_name()
+        let chapter_name = chapter_path
+            .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("Untitled Chapter")
             .to_string();
@@ -278,7 +390,8 @@ async fn import_directory(
             page_ids: Vec::new(),
         };
 
-        session.apply(koharu_core::Op::AddChapter { chapter })
+        session
+            .apply(koharu_core::Op::AddChapter { chapter })
             .map_err(ApiError::internal)?;
 
         let raw_dir = chapter_path.join("raw");
@@ -296,7 +409,12 @@ async fn import_directory(
                         let path = entry.path();
                         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                             let ext_lower = ext.to_lowercase();
-                            if ext_lower == "png" || ext_lower == "jpg" || ext_lower == "jpeg" || ext_lower == "webp" || ext_lower == "bmp" {
+                            if ext_lower == "png"
+                                || ext_lower == "jpg"
+                                || ext_lower == "jpeg"
+                                || ext_lower == "webp"
+                                || ext_lower == "bmp"
+                            {
                                 raw_files.push(path);
                             }
                         }
@@ -312,26 +430,32 @@ async fn import_directory(
         });
 
         let blobs = session.blobs.clone();
-        let decoded: Vec<(String, u32, u32, koharu_core::BlobRef)> = tokio::task::spawn_blocking(move || {
-            raw_files
-                .into_par_iter()
-                .map(|path| -> ApiResult<(String, u32, u32, koharu_core::BlobRef)> {
-                    let filename = path.file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "page.png".to_string());
-                    let bytes = std::fs::read(&path)
-                        .map_err(|e| ApiError::bad_request(format!("read `{filename}`: {e}")))?;
-                    let img = image::load_from_memory(&bytes)
-                        .map_err(|e| ApiError::bad_request(format!("decode `{filename}`: {e}")))?;
-                    let (w, h) = img.dimensions();
-                    let blob = blobs.put_bytes(&bytes).map_err(ApiError::internal)?;
-                    Ok((filename, w, h, blob))
-                })
-                .collect::<ApiResult<Vec<_>>>()
-        })
-        .await
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("import task panicked: {e}")))??;
+        let decoded: Vec<(String, u32, u32, koharu_core::BlobRef)> =
+            tokio::task::spawn_blocking(move || {
+                raw_files
+                    .into_par_iter()
+                    .map(
+                        |path| -> ApiResult<(String, u32, u32, koharu_core::BlobRef)> {
+                            let filename = path
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "page.png".to_string());
+                            let bytes = std::fs::read(&path).map_err(|e| {
+                                ApiError::bad_request(format!("read `{filename}`: {e}"))
+                            })?;
+                            let img = image::load_from_memory(&bytes).map_err(|e| {
+                                ApiError::bad_request(format!("decode `{filename}`: {e}"))
+                            })?;
+                            let (w, h) = img.dimensions();
+                            let blob = blobs.put_bytes(&bytes).map_err(ApiError::internal)?;
+                            Ok((filename, w, h, blob))
+                        },
+                    )
+                    .collect::<ApiResult<Vec<_>>>()
+            })
+            .await
+            .map_err(|e| ApiError::internal(anyhow::anyhow!("import task panicked: {e}")))??;
 
         let mut ops = Vec::with_capacity(decoded.len());
         let starting_index = session.scene.read().pages.len();
@@ -362,11 +486,12 @@ async fn import_directory(
         }
 
         if !ops.is_empty() {
-            session.apply(koharu_core::Op::Batch {
-                ops,
-                label: format!("Import chapter {} pages", chapter_name),
-            })
-            .map_err(ApiError::internal)?;
+            session
+                .apply(koharu_core::Op::Batch {
+                    ops,
+                    label: format!("Import chapter {} pages", chapter_name),
+                })
+                .map_err(ApiError::internal)?;
         }
     }
 
@@ -468,7 +593,8 @@ async fn export_current_project(
                     if let Some(ref s_dir) = sync_dir {
                         let scene = session_c.scene.read();
                         if let Some(page) = scene.pages.get(id) {
-                            let chapter_name = page.chapter_id
+                            let chapter_name = page
+                                .chapter_id
                                 .and_then(|ch_id| scene.chapters.get(&ch_id))
                                 .map(|ch| ch.name.as_str())
                                 .unwrap_or("Untitled Chapter");
@@ -476,9 +602,8 @@ async fn export_current_project(
                                 .file_stem()
                                 .and_then(|s| s.to_str())
                                 .unwrap_or(&page.name);
-                            let target_dir = std::path::Path::new(s_dir)
-                                .join(chapter_name)
-                                .join("psd");
+                            let target_dir =
+                                std::path::Path::new(s_dir).join(chapter_name).join("psd");
                             let _ = std::fs::create_dir_all(&target_dir);
                             let target_path = target_dir.join(format!("{}.psd", page_stem));
                             let _ = std::fs::write(&target_path, &bytes);
@@ -538,7 +663,8 @@ async fn export_image_role(
                     if let Some(ref s_dir) = sync_dir {
                         let scene = session_c.scene.read();
                         if let Some(page) = scene.pages.get(id) {
-                            let chapter_name = page.chapter_id
+                            let chapter_name = page
+                                .chapter_id
                                 .and_then(|ch_id| scene.chapters.get(&ch_id))
                                 .map(|ch| ch.name.as_str())
                                 .unwrap_or("Untitled Chapter");

@@ -12,6 +12,7 @@
  */
 
 import { isTauri } from '@/lib/backend'
+import i18n from '@/lib/i18n'
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'] as const
 const IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp']
@@ -33,7 +34,7 @@ export async function openImageFiles(): Promise<ImagePickerResult> {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const picked = await open({
       multiple: true,
-      filters: [{ name: 'Images', extensions: [...IMAGE_EXTENSIONS] }],
+      filters: [{ name: i18n.t('files.images'), extensions: [...IMAGE_EXTENSIONS] }],
     })
     if (!picked) return { kind: 'paths', paths: [] }
     const paths = Array.isArray(picked) ? picked : [picked]
@@ -46,7 +47,7 @@ export async function openImageFiles(): Promise<ImagePickerResult> {
       multiple: true,
       mimeTypes: IMAGE_MIME,
       extensions: IMAGE_EXTENSIONS.map((e) => `.${e}`),
-      description: 'Images',
+      description: i18n.t('files.images'),
     })
     return { kind: 'files', files: Array.isArray(result) ? result : [result] }
   } catch (e) {
@@ -90,7 +91,7 @@ export async function openKhrFile(): Promise<File | null> {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const picked = await open({
       multiple: false,
-      filters: [{ name: 'Koharu archive', extensions: ['khr'] }],
+      filters: [{ name: i18n.t('files.koharuArchive'), extensions: ['khr'] }],
     })
     if (!picked || typeof picked !== 'string') return null
     const [file] = await readTauriFiles([picked])
@@ -102,7 +103,7 @@ export async function openKhrFile(): Promise<File | null> {
     const result = await fileOpen({
       multiple: false,
       extensions: ['.khr'],
-      description: 'Koharu archive',
+      description: i18n.t('files.koharuArchive'),
     })
     return Array.isArray(result) ? (result[0] ?? null) : result
   } catch (e) {

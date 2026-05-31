@@ -573,6 +573,23 @@
         }
       }
     },
+    "/manga/install-git": {
+      "post": {
+        "operationId": "install_git",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneConnectorsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/manga/project": {
       "post": {
         "operationId": "create_manga_project",
@@ -656,6 +673,33 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/manga/sources/{id}/icon": {
+      "get": {
+        "operationId": "get_source_icon",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Manga source ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns the source icon",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "307": {
+            "description": "Redirects to external favicon fallback"
           }
         }
       }
@@ -1150,6 +1194,43 @@
         "responses": {
           "204": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/projects/{id}/name": {
+      "put": {
+        "operationId": "rename_project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSummary"
+                }
+              }
+            }
           }
         }
       }
@@ -2846,6 +2927,12 @@
           "description": {
             "type": "string"
           },
+          "iconUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "id": {
             "type": "string"
           },
@@ -3894,6 +3981,18 @@
             "type": "string",
             "description": "Absolute filesystem path. Informational; clients never need to pass\nit back in — they use `id`."
           },
+          "projectType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "syncDir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "updatedAtMs": {
             "type": "integer",
             "format": "int64",
@@ -4015,6 +4114,17 @@
           }
         }
       },
+      "RenameProjectRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "Scene": {
         "type": "object",
         "required": [
@@ -4052,8 +4162,7 @@
         "type": "object",
         "description": "JSON-shaped scene snapshot for the UI (no postcard decoder in JS).",
         "required": [
-          "epoch",
-          "scene"
+          "epoch"
         ],
         "properties": {
           "epoch": {
@@ -4062,7 +4171,14 @@
             "minimum": 0
           },
           "scene": {
-            "$ref": "#/components/schemas/Scene"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Scene"
+              }
+            ]
           }
         }
       },

@@ -64,6 +64,7 @@ import type {
   PutMaskParams,
   PutMaskResponse,
   ReadingOrder,
+  RenameProjectRequest,
   SceneSnapshot,
   SearchMangaParams,
   StartDownloadRequest,
@@ -2184,6 +2185,69 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getDownloadMangaChapterMutationOptions(options), queryClient);
     }
+    export const getInstallGitUrl = () => {
+
+
+
+
+  return `/api/v1/manga/install-git`
+}
+
+export const installGit = async ( options?: RequestInit): Promise<CloneConnectorsResponse> => {
+
+  return fetchApi<CloneConnectorsResponse>(getInstallGitUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getInstallGitMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof installGit>>, TError,void, TContext>, request?: SecondParameter<typeof fetchApi>}
+): UseMutationOptions<Awaited<ReturnType<typeof installGit>>, TError,void, TContext> => {
+
+const mutationKey = ['installGit'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof installGit>>, void> = () => {
+
+
+          return  installGit(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InstallGitMutationResult = NonNullable<Awaited<ReturnType<typeof installGit>>>
+
+    export type InstallGitMutationError = unknown
+
+    export const useInstallGit = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof installGit>>, TError,void, TContext>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof installGit>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getInstallGitMutationOptions(options), queryClient);
+    }
     export const getCreateMangaProjectUrl = () => {
 
 
@@ -2431,6 +2495,100 @@ export function useListMangaSources<TData = Awaited<ReturnType<typeof listMangaS
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListMangaSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+export const getGetSourceIconUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/manga/sources/${id}/icon`
+}
+
+export const getSourceIcon = async (id: string, options?: RequestInit): Promise<Blob> => {
+
+  return fetchApi<Blob>(getGetSourceIconUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSourceIconQueryKey = (id: string,) => {
+    return [
+    `/api/v1/manga/sources/${id}/icon`
+    ] as const;
+    }
+
+
+export const getGetSourceIconQueryOptions = <TData = Awaited<ReturnType<typeof getSourceIcon>>, TError = void>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSourceIconQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSourceIcon>>> = ({ signal }) => getSourceIcon(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined,  gcTime: 300000, retry: 1,  ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSourceIconQueryResult = NonNullable<Awaited<ReturnType<typeof getSourceIcon>>>
+export type GetSourceIconQueryError = void
+
+
+export function useGetSourceIcon<TData = Awaited<ReturnType<typeof getSourceIcon>>, TError = void>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSourceIcon>>,
+          TError,
+          Awaited<ReturnType<typeof getSourceIcon>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSourceIcon<TData = Awaited<ReturnType<typeof getSourceIcon>>, TError = void>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSourceIcon>>,
+          TError,
+          Awaited<ReturnType<typeof getSourceIcon>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSourceIcon<TData = Awaited<ReturnType<typeof getSourceIcon>>, TError = void>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetSourceIcon<TData = Awaited<ReturnType<typeof getSourceIcon>>, TError = void>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSourceIcon>>, TError, TData>>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSourceIconQueryOptions(id,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -3737,6 +3895,70 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteProjectByIdMutationOptions(options), queryClient);
+    }
+    export const getRenameProjectUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/projects/${id}/name`
+}
+
+export const renameProject = async (id: string,
+    renameProjectRequest: RenameProjectRequest, options?: RequestInit): Promise<ProjectSummary> => {
+
+  return fetchApi<ProjectSummary>(getRenameProjectUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameProjectRequest)
+  }
+);}
+
+
+
+
+export const getRenameProjectMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameProject>>, TError,{id: string;data: RenameProjectRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+): UseMutationOptions<Awaited<ReturnType<typeof renameProject>>, TError,{id: string;data: RenameProjectRequest}, TContext> => {
+
+const mutationKey = ['renameProject'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof renameProject>>, {id: string;data: RenameProjectRequest}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  renameProject(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RenameProjectMutationResult = NonNullable<Awaited<ReturnType<typeof renameProject>>>
+    export type RenameProjectMutationBody = RenameProjectRequest
+    export type RenameProjectMutationError = unknown
+
+    export const useRenameProject = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof renameProject>>, TError,{id: string;data: RenameProjectRequest}, TContext>, request?: SecondParameter<typeof fetchApi>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof renameProject>>,
+        TError,
+        {id: string;data: RenameProjectRequest},
+        TContext
+      > => {
+      return useMutation(getRenameProjectMutationOptions(options), queryClient);
     }
     export const getGetSceneBinUrl = () => {
 

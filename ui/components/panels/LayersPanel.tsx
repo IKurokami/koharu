@@ -160,7 +160,7 @@ function LayerItem({ layer }: { layer: Layer }) {
         )}
       >
         {layer.icon === 'RAW' ? (
-          <span className='text-[8px] font-bold'>RAW</span>
+          <span className='text-[8px] font-bold'>{t('layers.rawBadge')}</span>
         ) : (
           <layer.icon className='size-3.5' />
         )}

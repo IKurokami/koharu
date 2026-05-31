@@ -63,7 +63,7 @@ function sanitiseBaseName(name: string | undefined | null): string {
 /** Read the current project name from React Query's cached scene snapshot. */
 function currentProjectName(): string | undefined {
   const snap = queryClient.getQueryData<SceneSnapshot>(getGetSceneJsonQueryKey())
-  return snap?.scene.project?.name ?? undefined
+  return snap?.scene?.project?.name ?? undefined
 }
 
 /** Read the current project's sync directory path. */
