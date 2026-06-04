@@ -1,7 +1,7 @@
 'use client'
 
-import { GripVertical, Languages, LoaderCircleIcon, Trash2Icon, Eraser } from 'lucide-react'
-import { motion, Reorder } from 'motion/react'
+import { Eraser, GripVertical, Languages, LoaderCircleIcon, Trash2Icon } from 'lucide-react'
+import { Reorder } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,6 +12,13 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import { DraftTextarea } from '@/components/ui/draft-textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
@@ -24,9 +31,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCurrentPage, useTextNodes, type TextNodeEntry } from '@/hooks/useCurrentPage'
 import { getConfig, startPipeline, useGetCurrentLlm } from '@/lib/api/default/default'
-import { fetchApi } from '@/lib/api/fetch'
 import type { TextDataPatch } from '@/lib/api/schemas'
-import { applyOp, invalidateScene, queueAutoRender, reorderPageTextNodes } from '@/lib/io/scene'
+import { applyOp, queueAutoRender, reorderPageTextNodes } from '@/lib/io/scene'
 import { ops } from '@/lib/ops'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
 import { useJobsStore } from '@/lib/stores/jobsStore'
@@ -92,9 +98,9 @@ export function TextBlocksPanel() {
             sprite: null,
             spriteTransform: null,
             renderedDirection: null,
-          }
-        } as never
-      })
+          },
+        } as never,
+      }),
     )
     queueAutoRender(page.id)
   }
@@ -304,145 +310,170 @@ function BlockCard({
       transition={{ duration: 0.2, delay: index * 0.03 }}
       className='select-none'
     >
-      <AccordionItem
-        value={index.toString()}
-        data-selected={selected}
-        className='overflow-hidden rounded-md bg-card/90 text-xs ring-1 ring-border data-[selected=true]:ring-primary'
-      >
-        <AccordionTrigger
-          onClick={(e) => {
-            if (e.shiftKey || e.ctrlKey || e.metaKey) {
-              e.preventDefault()
-              e.stopPropagation()
-              onToggleSelect()
-            }
-          }}
-          className='flex w-full cursor-pointer items-center gap-1.5 px-2 py-1.5 text-left transition outline-none hover:no-underline data-[state=open]:bg-accent [&>svg]:hidden'
-        >
-          <div className='flex items-center gap-1 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground shrink-0'>
-            <GripVertical className='size-3' />
-            <span
-              className={`rounded-md px-1.5 py-0.5 text-center text-[10px] font-medium text-white tabular-nums ${
-                selected ? 'bg-primary' : 'bg-muted-foreground/60'
-              }`}
-              style={{ minWidth: '1.5rem' }}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div data-testid={`textblock-context-${index}`}>
+            <AccordionItem
+              value={index.toString()}
+              data-selected={selected}
+              className='overflow-hidden rounded-md bg-card/90 text-xs ring-1 ring-border data-[selected=true]:ring-primary'
             >
-              {index + 1}
-            </span>
-          </div>
-          <div className='flex min-w-0 flex-1 items-center gap-1'>
-            <span
-              className={`shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-medium uppercase ${
-                hasOcr ? 'bg-rose-400/70 text-white' : 'bg-muted text-muted-foreground/50'
-              }`}
-            >
-              {t('textBlocks.ocrBadge')}
-            </span>
-            <span
-              className={`shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-medium uppercase ${
-                hasTranslation ? 'bg-rose-400/70 text-white' : 'bg-muted text-muted-foreground/50'
-              }`}
-            >
-              {t('textBlocks.translationBadge')}
-            </span>
-            {preview && (
-              <p className='line-clamp-1 min-w-0 flex-1 text-xs text-muted-foreground'>{preview}</p>
-            )}
-          </div>
-        </AccordionTrigger>
-        <AccordionContent className='px-2 pt-1.5 pb-2 shadow-[inset_0_1px_0_0_var(--color-border)]'>
-          <div className='space-y-1.5'>
-            <div className='flex flex-col gap-0.5'>
-              <span className='text-[10px] text-muted-foreground uppercase'>
-                {t('textBlocks.ocrLabel')}
-              </span>
-              <DraftTextarea
-                data-testid={`textblock-ocr-${index}`}
-                value={data.text ?? ''}
-                placeholder={t('textBlocks.addOcrPlaceholder')}
-                rows={2}
-                onValueChange={(value) => onPatch({ text: value })}
-                className='min-h-0 resize-none px-1.5 py-1 text-xs'
-              />
-            </div>
-            <div className='flex flex-col gap-0.5'>
-              <div className='flex items-center justify-between'>
-                <span className='text-[10px] text-muted-foreground uppercase'>
-                  {t('textBlocks.translationLabel')}
-                </span>
-                <div className='flex items-center gap-0.5'>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid={`textblock-clear-${index}`}
-                        aria-label={t('textBlocks.clearText')}
-                        variant='ghost'
-                        size='icon-xs'
-                        disabled={processing}
-                        onClick={onClear}
-                        className='size-5 text-amber-600 hover:text-amber-600'
-                      >
-                        <Eraser className='size-3' />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side='left' sideOffset={4}>
-                      {t('textBlocks.clearText')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid={`textblock-delete-${index}`}
-                        aria-label={t('workspace.deleteBlock')}
-                        variant='ghost'
-                        size='icon-xs'
-                        disabled={processing}
-                        onClick={onDelete}
-                        className='size-5 text-rose-600 hover:text-rose-600'
-                      >
-                        <Trash2Icon className='size-3' />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side='left' sideOffset={4}>
-                      {t('workspace.deleteBlock')}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid={`textblock-generate-${index}`}
-                        aria-label={t('llm.generateTooltip')}
-                        variant='ghost'
-                        size='icon-xs'
-                        disabled={!llmReady || processing}
-                        onClick={onGenerate}
-                        className='size-5'
-                      >
-                        {processing ? (
-                          <LoaderCircleIcon className='size-3 animate-spin' />
-                        ) : (
-                          <Languages className='size-3' />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side='left' sideOffset={4}>
-                      {t('llm.generateTooltip')}
-                    </TooltipContent>
-                  </Tooltip>
+              <AccordionTrigger
+                onClick={(e) => {
+                  if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onToggleSelect()
+                  }
+                }}
+                className='flex w-full cursor-pointer items-center gap-1.5 px-2 py-1.5 text-left transition outline-none hover:no-underline data-[state=open]:bg-accent [&>svg]:hidden'
+              >
+                <div className='flex shrink-0 cursor-grab items-center gap-1 text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing'>
+                  <GripVertical className='size-3' />
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-center text-[10px] font-medium text-white tabular-nums ${
+                      selected ? 'bg-primary' : 'bg-muted-foreground/60'
+                    }`}
+                    style={{ minWidth: '1.5rem' }}
+                  >
+                    {index + 1}
+                  </span>
                 </div>
-              </div>
-              <DraftTextarea
-                data-testid={`textblock-translation-${index}`}
-                value={data.translation ?? ''}
-                placeholder={t('textBlocks.addTranslationPlaceholder')}
-                rows={2}
-                onValueChange={(value) => onPatch({ translation: value })}
-                className='min-h-0 resize-none px-1.5 py-1 text-xs'
-              />
-            </div>
+                <div className='flex min-w-0 flex-1 items-center gap-1'>
+                  <span
+                    className={`shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-medium uppercase ${
+                      hasOcr ? 'bg-rose-400/70 text-white' : 'bg-muted text-muted-foreground/50'
+                    }`}
+                  >
+                    {t('textBlocks.ocrBadge')}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-medium uppercase ${
+                      hasTranslation
+                        ? 'bg-rose-400/70 text-white'
+                        : 'bg-muted text-muted-foreground/50'
+                    }`}
+                  >
+                    {t('textBlocks.translationBadge')}
+                  </span>
+                  {preview && (
+                    <p className='line-clamp-1 min-w-0 flex-1 text-xs text-muted-foreground'>
+                      {preview}
+                    </p>
+                  )}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className='px-2 pt-1.5 pb-2 shadow-[inset_0_1px_0_0_var(--color-border)]'>
+                <div className='space-y-1.5'>
+                  <div className='flex flex-col gap-0.5'>
+                    <span className='text-[10px] text-muted-foreground uppercase'>
+                      {t('textBlocks.ocrLabel')}
+                    </span>
+                    <DraftTextarea
+                      data-testid={`textblock-ocr-${index}`}
+                      value={data.text ?? ''}
+                      placeholder={t('textBlocks.addOcrPlaceholder')}
+                      rows={2}
+                      onValueChange={(value) => onPatch({ text: value })}
+                      className='min-h-0 resize-none px-1.5 py-1 text-xs'
+                    />
+                  </div>
+                  <div className='flex flex-col gap-0.5'>
+                    <div className='flex items-center justify-between'>
+                      <span className='text-[10px] text-muted-foreground uppercase'>
+                        {t('textBlocks.translationLabel')}
+                      </span>
+                      <div className='flex items-center gap-0.5'>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              data-testid={`textblock-clear-${index}`}
+                              aria-label={t('textBlocks.clearText')}
+                              variant='ghost'
+                              size='icon-xs'
+                              disabled={processing}
+                              onClick={onClear}
+                              className='size-5 text-amber-600 hover:text-amber-600'
+                            >
+                              <Eraser className='size-3' />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side='left' sideOffset={4}>
+                            {t('textBlocks.clearText')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              data-testid={`textblock-delete-${index}`}
+                              aria-label={t('workspace.deleteBlock')}
+                              variant='ghost'
+                              size='icon-xs'
+                              disabled={processing}
+                              onClick={onDelete}
+                              className='size-5 text-rose-600 hover:text-rose-600'
+                            >
+                              <Trash2Icon className='size-3' />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side='left' sideOffset={4}>
+                            {t('workspace.deleteBlock')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              data-testid={`textblock-generate-${index}`}
+                              aria-label={t('llm.generateTooltip')}
+                              variant='ghost'
+                              size='icon-xs'
+                              disabled={!llmReady || processing}
+                              onClick={onGenerate}
+                              className='size-5'
+                            >
+                              {processing ? (
+                                <LoaderCircleIcon className='size-3 animate-spin' />
+                              ) : (
+                                <Languages className='size-3' />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side='left' sideOffset={4}>
+                            {t('llm.generateTooltip')}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <DraftTextarea
+                      data-testid={`textblock-translation-${index}`}
+                      value={data.translation ?? ''}
+                      placeholder={t('textBlocks.addTranslationPlaceholder')}
+                      rows={2}
+                      onValueChange={(value) => onPatch({ translation: value })}
+                      className='min-h-0 resize-none px-1.5 py-1 text-xs'
+                    />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           </div>
-        </AccordionContent>
-      </AccordionItem>
+        </ContextMenuTrigger>
+        <ContextMenuContent className='w-44'>
+          <ContextMenuItem disabled={!llmReady || processing} onSelect={onGenerate}>
+            <Languages className='size-4' />
+            {t('textBlocks.generateBlock')}
+          </ContextMenuItem>
+          <ContextMenuItem disabled={processing} onSelect={onClear}>
+            <Eraser className='size-4' />
+            {t('textBlocks.clearText')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={processing} variant='destructive' onSelect={onDelete}>
+            <Trash2Icon className='size-4' />
+            {t('workspace.deleteBlock')}
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </Reorder.Item>
   )
 }

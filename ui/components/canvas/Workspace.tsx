@@ -19,8 +19,8 @@ import {
   resolvePinchMemoScaleRatio,
   resolvePinchNextScaleRatio,
 } from '@/components/canvas/zoomGestures'
-import { Image } from '@/components/Image'
 import { FlickeringGrid } from '@/components/FlickeringGrid'
+import { Image } from '@/components/Image'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -189,10 +189,6 @@ export function Workspace() {
     useBlockContextMenu({
       page,
       pointerToDocument,
-      onSelect: (nodeId) => {
-        if (nodeId) useSelectionStore.getState().selectMany([nodeId])
-        else useSelectionStore.getState().clear()
-      },
       onRemove: (nodeId) => {
         void removeTextNode(nodeId)
       },
@@ -276,25 +272,27 @@ export function Workspace() {
   return (
     <div className='relative flex min-h-0 min-w-0 flex-1 bg-transparent'>
       <ToolRail />
-      <SubToolRail />
       <div className='relative flex min-h-0 min-w-0 flex-1 flex-col'>
         <CanvasToolbar />
-        <ScrollAreaPrimitive.Root className='flex min-h-0 min-w-0 flex-1 relative bg-transparent'>
+        <SubToolRail />
+        <ScrollAreaPrimitive.Root className='relative flex min-h-0 min-w-0 flex-1 bg-transparent'>
           {/* Ambient Flickering Grid background for the center panel workspace */}
-          <div className='absolute inset-0 pointer-events-none z-0 opacity-40 dark:opacity-[0.16]'>
-            <FlickeringGrid
-              squareSize={4}
-              gridGap={6}
-              flickerChance={0.25}
-              color="rgb(99, 102, 241)"
-              maxOpacity={0.25}
-            />
-          </div>
+          {!isBrushMode && (
+            <div className='pointer-events-none absolute inset-0 z-0 opacity-40 dark:opacity-[0.16]'>
+              <FlickeringGrid
+                squareSize={4}
+                gridGap={6}
+                flickerChance={0.25}
+                color='rgb(99, 102, 241)'
+                maxOpacity={0.25}
+              />
+            </div>
+          )}
 
           <ScrollAreaPrimitive.Viewport
             ref={handleViewportRef}
             data-testid='workspace-viewport'
-            className='grid size-full place-content-center-safe relative z-10 bg-transparent'
+            className='relative z-10 grid size-full place-content-center-safe bg-transparent'
           >
             {page ? (
               <ContextMenu
@@ -319,7 +317,7 @@ export function Workspace() {
                     >
                       <div
                         ref={brushCursorRef}
-                        className='pointer-events-none absolute z-50 rounded-full border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5),0_1px_3px_rgba(0,0,0,0.3)] transition-opacity duration-75'
+                        className='pointer-events-none absolute z-50 rounded-full border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5),0_1px_3px_rgba(0,0,0,0.3)] transition-opacity duration-75 will-change-transform'
                         style={{
                           opacity: 0,
                           width: brushSize * scaleRatio,
@@ -328,15 +326,17 @@ export function Workspace() {
                       />
                       <div className='absolute inset-0'>
                         {/* Flickering Grid in the background of the image canvas */}
-                        <div className='absolute inset-0 pointer-events-none z-0 opacity-40 dark:opacity-[0.16]'>
-                          <FlickeringGrid
-                            squareSize={4}
-                            gridGap={6}
-                            flickerChance={0.25}
-                            color="rgb(99, 102, 241)"
-                            maxOpacity={0.25}
-                          />
-                        </div>
+                        {!isBrushMode && (
+                          <div className='pointer-events-none absolute inset-0 z-0 opacity-40 dark:opacity-[0.16]'>
+                            <FlickeringGrid
+                              squareSize={4}
+                              gridGap={6}
+                              flickerChance={0.25}
+                              color='rgb(99, 102, 241)'
+                              maxOpacity={0.25}
+                            />
+                          </div>
+                        )}
                         <Image
                           data={imageData}
                           dataKey={imageHash ?? undefined}

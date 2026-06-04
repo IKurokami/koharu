@@ -2,8 +2,10 @@
 
 import {
   BookOpenIcon,
+  CopyIcon,
   LanguagesIcon,
   LoaderCircleIcon,
+  SaveIcon,
   ScanIcon,
   ScanTextIcon,
   TypeIcon,
@@ -36,8 +38,15 @@ import {
   useGetCurrentLlm,
 } from '@/lib/api/default/default'
 import type { LlmCatalog, LlmCatalogModel, LlmProviderCatalog, LlmTarget } from '@/lib/api/schemas'
-import type { Op } from '@/lib/api/schemas'
+import { saveBlob } from '@/lib/io/saveBlob'
 import { applyOp, queueAutoRender } from '@/lib/io/scene'
+import {
+  formatTranslatedTextExport,
+  hasTranslatedText,
+  resolveTranslatedTextPages,
+  translatedTextDefaultFilename,
+  type TranslatedTextExportScope,
+} from '@/lib/io/translatedText'
 import { ops } from '@/lib/ops'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
 import { useJobsStore } from '@/lib/stores/jobsStore'
@@ -69,6 +78,29 @@ const flattenCatalogModels = (catalog?: LlmCatalog): SelectableLlmModel[] => [
     .filter((p) => p.status === 'ready')
     .flatMap((p) => p.models.map((model) => ({ model, provider: p }))),
 ]
+
+async function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('Clipboard copy command failed')
+    }
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -125,11 +157,10 @@ function WorkflowButtons() {
    * the Rust `PipelineConfig`, so we trust what the server returns and
    * never hard-code fallbacks here.
    *
-   * Detect is the only multi-engine button; it bundles detector +
-   * segmenter + font-detector so the subsequent single-engine steps
-   * (OCR / Inpaint / Render) find their inputs already on the page. The
-   * backend driver skips any step whose artifact is already satisfied,
-   * so re-running is idempotent.
+   * Detect is the broad setup button; it bundles detector + text segmenter +
+   * bubble segmenter + font detector so later steps find their inputs already
+   * on the page. The backend driver skips any step whose artifact is already
+   * satisfied, so re-running is idempotent.
    */
   const runStep = async (
     pick: (p: NonNullable<Awaited<ReturnType<typeof getConfig>>['pipeline']>) => string[],
@@ -162,7 +193,7 @@ function WorkflowButtons() {
   ]
   const ocrChain: PipelinePick = (p) => [p.ocr!]
   const translateChain: PipelinePick = (p) => [p.translator!]
-  const inpaintChain: PipelinePick = (p) => [p.inpainter!]
+  const inpaintChain: PipelinePick = (p) => [p.bubble_segmenter!, p.inpainter!]
   const renderChain: PipelinePick = (p) => [p.renderer!]
 
   const isDetecting = currentStep === 'detect'
@@ -442,11 +473,62 @@ function LlmStatusPopover() {
 function TranslationToolPopover() {
   const { t } = useTranslation()
   const pageId = useSelectionStore((s) => s.pageId)
+  const selectedChapterId = useSelectionStore((s) => s.chapterId)
   const { scene } = useScene()
   const isProcessing = useIsProcessing()
   const { data: llmState } = useGetCurrentLlm()
   const llmReady = llmState?.status === 'ready'
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const currentPage = pageId && scene ? (scene.pages[pageId] ?? null) : null
+  const pageExportPages = currentPage ? [currentPage] : []
+  const chapterExportPages =
+    scene && currentPage
+      ? resolveTranslatedTextPages(scene, currentPage, selectedChapterId, 'chapter')
+      : []
+  const canExportPageText = hasTranslatedText(pageExportPages)
+  const canExportChapterText = hasTranslatedText(chapterExportPages)
+
+  const exportPagesForScope = (scope: TranslatedTextExportScope) =>
+    scope === 'page' ? pageExportPages : chapterExportPages
+
+  const handleCopyTranslatedText = async (scope: TranslatedTextExportScope) => {
+    if (!scene || !currentPage) return
+    const pages = exportPagesForScope(scope)
+    if (!hasTranslatedText(pages)) {
+      useEditorUiStore.getState().showError(t('canvas.toolbar.noTranslatedText'))
+      return
+    }
+
+    try {
+      await writeClipboardText(formatTranslatedTextExport(pages, scope))
+    } catch (err) {
+      console.error('[text-export] Failed to copy translated text:', err)
+      useEditorUiStore.getState().showError(t('canvas.toolbar.copyTranslatedTextFailed'))
+    }
+  }
+
+  const handleSaveTranslatedText = async (scope: TranslatedTextExportScope) => {
+    if (!scene || !currentPage) return
+    const pages = exportPagesForScope(scope)
+    if (!hasTranslatedText(pages)) {
+      useEditorUiStore.getState().showError(t('canvas.toolbar.noTranslatedText'))
+      return
+    }
+
+    try {
+      const text = formatTranslatedTextExport(pages, scope)
+      const defaultName = translatedTextDefaultFilename(
+        scene,
+        currentPage,
+        selectedChapterId,
+        scope,
+      )
+      await saveBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), defaultName)
+    } catch (err) {
+      console.error('[text-export] Failed to save translated text:', err)
+      useEditorUiStore.getState().showError(t('canvas.toolbar.saveTranslatedTextFailed'))
+    }
+  }
 
   const handleClearPage = async () => {
     if (!pageId || !scene) return
@@ -565,51 +647,104 @@ function TranslationToolPopover() {
             {t('canvas.toolbar.translationTool')}
           </span>
           <div className='flex flex-col gap-2'>
-            <div className='flex items-center gap-1.5'>
-              <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
-                {t('canvas.toolbar.pageLabel')}:
-              </span>
-              <Button
-                variant='outline'
-                size='xs'
-                className='h-6 flex-1 px-1 text-[10px]'
-                disabled={!pageId || isProcessing}
-                onClick={handleClearPage}
-              >
-                {t('common.delete')}
-              </Button>
-              <Button
-                variant='default'
-                size='xs'
-                className='h-6 flex-1 px-1 text-[10px]'
-                disabled={!pageId || !llmReady || isProcessing}
-                onClick={handleRetranslatePage}
-              >
-                {t('canvas.toolbar.retranslate')}
-              </Button>
+            <div className='flex flex-col gap-1.5'>
+              <div className='flex items-center gap-1.5'>
+                <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                  {t('canvas.toolbar.pageLabel')}:
+                </span>
+                <Button
+                  variant='outline'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || isProcessing}
+                  onClick={handleClearPage}
+                >
+                  {t('common.delete')}
+                </Button>
+                <Button
+                  variant='default'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || !llmReady || isProcessing}
+                  onClick={handleRetranslatePage}
+                >
+                  {t('canvas.toolbar.retranslate')}
+                </Button>
+              </div>
+              <div className='ml-[56px] grid grid-cols-2 gap-1.5'>
+                <Button
+                  data-testid='translation-tool-copy-page'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportPageText}
+                  onClick={() => void handleCopyTranslatedText('page')}
+                >
+                  <CopyIcon className='size-3' />
+                  {t('canvas.toolbar.copyText')}
+                </Button>
+                <Button
+                  data-testid='translation-tool-save-page'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportPageText}
+                  onClick={() => void handleSaveTranslatedText('page')}
+                >
+                  <SaveIcon className='size-3' />
+                  {t('canvas.toolbar.saveText')}
+                </Button>
+              </div>
             </div>
-            <div className='flex items-center gap-1.5'>
-              <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
-                {t('canvas.toolbar.chapterLabel')}:
-              </span>
-              <Button
-                variant='outline'
-                size='xs'
-                className='h-6 flex-1 px-1 text-[10px]'
-                disabled={!pageId || isProcessing}
-                onClick={handleClearChapter}
-              >
-                {t('common.delete')}
-              </Button>
-              <Button
-                variant='default'
-                size='xs'
-                className='h-6 flex-1 px-1 text-[10px]'
-                disabled={!pageId || !llmReady || isProcessing}
-                onClick={handleRetranslateChapter}
-              >
-                {t('canvas.toolbar.retranslate')}
-              </Button>
+            <Separator />
+            <div className='flex flex-col gap-1.5'>
+              <div className='flex items-center gap-1.5'>
+                <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                  {t('canvas.toolbar.chapterLabel')}:
+                </span>
+                <Button
+                  variant='outline'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || isProcessing}
+                  onClick={handleClearChapter}
+                >
+                  {t('common.delete')}
+                </Button>
+                <Button
+                  variant='default'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || !llmReady || isProcessing}
+                  onClick={handleRetranslateChapter}
+                >
+                  {t('canvas.toolbar.retranslate')}
+                </Button>
+              </div>
+              <div className='ml-[56px] grid grid-cols-2 gap-1.5'>
+                <Button
+                  data-testid='translation-tool-copy-chapter'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportChapterText}
+                  onClick={() => void handleCopyTranslatedText('chapter')}
+                >
+                  <CopyIcon className='size-3' />
+                  {t('canvas.toolbar.copyText')}
+                </Button>
+                <Button
+                  data-testid='translation-tool-save-chapter'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportChapterText}
+                  onClick={() => void handleSaveTranslatedText('chapter')}
+                >
+                  <SaveIcon className='size-3' />
+                  {t('canvas.toolbar.saveText')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -204,6 +204,7 @@ async fn run() -> Result<()> {
             text_node_ids: None,
             reading_order: None,
             region: None,
+            draft: None,
         },
     };
 

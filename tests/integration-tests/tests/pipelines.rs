@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use koharu_client::apis::default_api as api;
 use koharu_client::models;
-use koharu_core::{ImageRole, JobStatus, NodeKind, PageId};
+use koharu_core::{ImageRole, JobStatus, JobSummary, NodeKind, PageId};
 use koharu_integration_tests::TestApp;
 use reqwest::multipart::{Form, Part};
 use tokio::time::{Duration, Instant, sleep};
@@ -99,6 +99,33 @@ async fn cancel_operation_accepts_unknown_id() -> anyhow::Result<()> {
     let app = TestApp::spawn().await?;
     // Best-effort: cancelling an unknown operation is a no-op 204.
     api::cancel_operation(&app.client_config, "nonexistent").await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn cancel_operation_marks_running_job_cancelled_immediately() -> anyhow::Result<()> {
+    let app = TestApp::spawn().await?;
+    app.app.jobs.insert(
+        "job-1".to_string(),
+        JobSummary {
+            id: "job-1".to_string(),
+            kind: "pipeline".to_string(),
+            status: JobStatus::Running,
+            error: None,
+        },
+    );
+
+    api::cancel_operation(&app.client_config, "job-1").await?;
+
+    let job = app
+        .app
+        .jobs
+        .get("job-1")
+        .expect("job should remain in operation registry")
+        .value()
+        .clone();
+    assert_eq!(job.status, JobStatus::Cancelled);
+    assert!(job.error.is_none());
     Ok(())
 }
 

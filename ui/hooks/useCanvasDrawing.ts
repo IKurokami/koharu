@@ -115,9 +115,13 @@ export function useCanvasDrawing(
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const targetCtxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const configRef = useRef(config)
   const drawingRef = useRef(false)
   const lastPointRef = useRef<DocumentPointer | null>(null)
   const boundsRef = useRef<Bounds | null>(null)
+
+  configRef.current = config
 
   useEffect(() => {
     if (config.enabled) return
@@ -127,12 +131,17 @@ export function useCanvasDrawing(
   }, [config.enabled])
 
   useEffect(() => {
+    targetCtxRef.current = config.targetCanvasRef?.current?.getContext('2d') ?? null
+  }, [config.enabled, config.targetCanvasRef, dims?.key, dims?.width, dims?.height])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    const currentConfig = configRef.current
     const ctx = canvas.getContext('2d')
     ctxRef.current = ctx
 
-    if (!dims || !config.enabled) {
+    if (!dims || !currentConfig.enabled) {
       canvas.width = 0
       canvas.height = 0
       ctx?.clearRect(0, 0, canvas.width, canvas.height)
@@ -150,8 +159,8 @@ export function useCanvasDrawing(
     }
     ctx?.clearRect(0, 0, canvas.width, canvas.height)
 
-    if (config.onCanvasInit && ctx) {
-      const result = config.onCanvasInit(ctx, dims)
+    if (currentConfig.onCanvasInit && ctx) {
+      const result = currentConfig.onCanvasInit(ctx, dims)
       if (result && typeof (result as Promise<void>).then === 'function') {
         void (result as Promise<void>).catch(console.error)
       }
@@ -166,8 +175,9 @@ export function useCanvasDrawing(
   }, [dims?.key, dims?.width, dims?.height, config.enabled])
 
   const drawStroke = (from: DocumentPointer, to: DocumentPointer) => {
-    const color = config.getColor()
-    const brushSize = config.getBrushSize()
+    const currentConfig = configRef.current
+    const color = currentConfig.getColor()
+    const brushSize = currentConfig.getBrushSize()
 
     const stroke = (ctx: CanvasRenderingContext2D) => {
       ctx.save()
@@ -176,7 +186,7 @@ export function useCanvasDrawing(
       ctx.lineWidth = brushSize
       ctx.strokeStyle = color
       ctx.fillStyle = color
-      ctx.globalCompositeOperation = config.blendMode
+      ctx.globalCompositeOperation = currentConfig.blendMode
       ctx.beginPath()
       ctx.moveTo(from.x, from.y)
       ctx.lineTo(to.x, to.y)
@@ -186,12 +196,13 @@ export function useCanvasDrawing(
 
     const ctx = ctxRef.current
     if (ctx) stroke(ctx)
-    const targetCtx = config.targetCanvasRef?.current?.getContext('2d')
+    const targetCtx = targetCtxRef.current
     if (targetCtx) stroke(targetCtx)
   }
 
   const finalizeStroke = () => {
-    if (!config.enabled) return
+    const currentConfig = configRef.current
+    if (!currentConfig.enabled) return
     const strokeBounds = boundsRef.current
     if (!dims || !strokeBounds) return
     const patchRegion = boundsToRegion(strokeBounds, dims)
@@ -200,15 +211,15 @@ export function useCanvasDrawing(
     lastPointRef.current = null
 
     void (async () => {
-      const sourceCanvas = config.targetCanvasRef?.current ?? canvasRef.current
+      const sourceCanvas = currentConfig.targetCanvasRef?.current ?? canvasRef.current
       if (!sourceCanvas) return
       const patchBytes = await exportCanvasRegion(sourceCanvas, patchRegion)
 
-      if (config.onFinalizeFullCanvas) {
+      if (currentConfig.onFinalizeFullCanvas) {
         const fullBytes = await exportFullCanvas(sourceCanvas)
         if (fullBytes) {
           try {
-            await config.onFinalizeFullCanvas(fullBytes, patchRegion)
+            await currentConfig.onFinalizeFullCanvas(fullBytes, patchRegion)
           } catch (e) {
             console.error(e)
           }
@@ -217,13 +228,13 @@ export function useCanvasDrawing(
 
       if (patchBytes) {
         try {
-          await config.onFinalize(patchBytes, patchRegion)
+          await currentConfig.onFinalize(patchBytes, patchRegion)
         } catch (e) {
           console.error(e)
         }
       }
 
-      if (config.clearAfterStroke) {
+      if (currentConfig.clearAfterStroke) {
         const ctx = ctxRef.current
         const canvas = canvasRef.current
         if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -233,7 +244,8 @@ export function useCanvasDrawing(
 
   const bind = useDrag(
     ({ first, last, event, active }) => {
-      if (!config.enabled || !dims) return
+      const currentConfig = configRef.current
+      if (!currentConfig.enabled || !dims) return
       const sourceEvent = event as MouseEvent
       const point = pointerToDocument(sourceEvent)
       if (!point) {
@@ -241,7 +253,7 @@ export function useCanvasDrawing(
         return
       }
       const clamped = clampToDims(point, dims)
-      const brushSize = config.getBrushSize()
+      const brushSize = currentConfig.getBrushSize()
       const radius = brushSize / 2
 
       if (first) {

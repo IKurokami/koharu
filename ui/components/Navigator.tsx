@@ -1,11 +1,24 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { LayoutGridIcon, PlusIcon, Trash2Icon, CloudDownloadIcon } from 'lucide-react'
+import {
+  CloudDownloadIcon,
+  LayoutGridIcon,
+  MousePointerClickIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DownloadChapterDialog } from '@/components/DownloadChapterDialog'
 import { PageManagerDialog } from '@/components/PageManagerDialog'
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import {
   Dialog,
   DialogContent,
@@ -15,7 +28,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -370,7 +382,7 @@ export function Navigator() {
         )}
       </div>
 
-      <ScrollArea className='min-h-0 flex-1' viewportRef={viewportRef}>
+      <div ref={viewportRef} className='min-h-0 flex-1 overflow-x-hidden overflow-y-auto'>
         <div className='relative w-full' style={{ height: virtualizer.getTotalSize() + 24 }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const page = pages[virtualRow.index]
@@ -402,7 +414,7 @@ export function Navigator() {
             )
           })}
         </div>
-      </ScrollArea>
+      </div>
 
       <PageManagerDialog open={pageManagerOpen} onOpenChange={setPageManagerOpen} />
 
@@ -503,68 +515,99 @@ function PagePreview({
       : 'translate-y-0'
 
   return (
-    <div className='group/preview relative h-full w-full'>
-      {index === 0 && onInsertBefore && (
-        <InsertPageDivider
-          onClick={onInsertBefore}
-          onMouseEnter={() => setHoveredInsertIndex(0)}
-          onMouseLeave={() => setHoveredInsertIndex(null)}
-          position='top'
-        />
-      )}
-
-      {onInsert && (
-        <InsertPageDivider
-          onClick={onInsert}
-          onMouseEnter={() => setHoveredInsertIndex(index + 1)}
-          onMouseLeave={() => setHoveredInsertIndex(null)}
-        />
-      )}
-
-      <Button
-        variant='ghost'
-        onClick={onSelect}
-        data-testid={`navigator-page-${index}`}
-        data-page-index={index}
-        data-selected={selected}
-        className={`flex h-full w-full flex-col gap-0.5 rounded border border-transparent bg-card p-1.5 text-left shadow-sm transition-transform duration-300 ease-out data-[selected=true]:border-primary ${translateClass}`}
-      >
-        <div className='flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded'>
-          {src ? (
-            <img
-              src={src}
-              alt={fallbackPageName}
-              loading='lazy'
-              className='max-h-full max-w-full rounded object-contain'
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className='group/preview relative h-full w-full'>
+          {index === 0 && onInsertBefore && (
+            <InsertPageDivider
+              onClick={onInsertBefore}
+              onMouseEnter={() => setHoveredInsertIndex(0)}
+              onMouseLeave={() => setHoveredInsertIndex(null)}
+              position='top'
             />
-          ) : (
-            <div className='h-full w-full rounded bg-muted' />
+          )}
+
+          {onInsert && (
+            <InsertPageDivider
+              onClick={onInsert}
+              onMouseEnter={() => setHoveredInsertIndex(index + 1)}
+              onMouseLeave={() => setHoveredInsertIndex(null)}
+            />
+          )}
+
+          <Button
+            variant='ghost'
+            onClick={onSelect}
+            data-testid={`navigator-page-${index}`}
+            data-page-index={index}
+            data-selected={selected}
+            className={`flex h-full w-full flex-col gap-0.5 rounded border border-transparent bg-card p-1.5 text-left shadow-sm transition-transform duration-300 ease-out data-[selected=true]:border-primary ${translateClass}`}
+          >
+            <div className='flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded'>
+              {src ? (
+                <img
+                  src={src}
+                  alt={fallbackPageName}
+                  loading='lazy'
+                  className='max-h-full max-w-full rounded object-contain'
+                />
+              ) : (
+                <div className='h-full w-full rounded bg-muted' />
+              )}
+            </div>
+            <div className='flex w-full shrink-0 flex-col items-center justify-center gap-0.5 px-1 text-xs text-muted-foreground'>
+              <span
+                className='max-w-full truncate font-semibold text-foreground'
+                title={name || fallbackPageName}
+              >
+                {index + 1}. {name || fallbackPageName}
+              </span>
+            </div>
+          </Button>
+          {onDelete && (
+            <Button
+              variant='destructive'
+              size='icon'
+              className={`absolute top-1 right-1 h-6 w-6 scale-90 cursor-pointer border-none opacity-0 shadow-md transition-all transition-transform duration-200 duration-300 group-hover/preview:scale-100 group-hover/preview:opacity-100 ${translateClass}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              title={t('navigator.deletePage')}
+            >
+              <Trash2Icon className='h-3 w-3' />
+            </Button>
           )}
         </div>
-        <div className='flex w-full shrink-0 flex-col items-center justify-center gap-0.5 px-1 text-xs text-muted-foreground'>
-          <span
-            className='max-w-full truncate font-semibold text-foreground'
-            title={name || fallbackPageName}
-          >
-            {index + 1}. {name || fallbackPageName}
-          </span>
-        </div>
-      </Button>
-      {onDelete && (
-        <Button
-          variant='destructive'
-          size='icon'
-          className={`absolute top-1 right-1 h-6 w-6 scale-90 cursor-pointer border-none opacity-0 shadow-md transition-all transition-transform duration-200 duration-300 group-hover/preview:scale-100 group-hover/preview:opacity-100 ${translateClass}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
-          }}
-          title={t('navigator.deletePage')}
-        >
-          <Trash2Icon className='h-3 w-3' />
-        </Button>
-      )}
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className='w-48'>
+        <ContextMenuItem onSelect={onSelect}>
+          <MousePointerClickIcon className='size-4' />
+          {t('navigator.openPage')}
+        </ContextMenuItem>
+        {onInsertBefore && (
+          <ContextMenuItem onSelect={onInsertBefore}>
+            <PlusIcon className='size-4' />
+            {t('navigator.insertPageBefore')}
+          </ContextMenuItem>
+        )}
+        {onInsert && (
+          <ContextMenuItem onSelect={onInsert}>
+            <PlusIcon className='size-4' />
+            {t('navigator.insertPageAfter')}
+          </ContextMenuItem>
+        )}
+        {onDelete && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant='destructive' onSelect={onDelete}>
+              <Trash2Icon className='size-4' />
+              {t('navigator.deletePage')}
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 

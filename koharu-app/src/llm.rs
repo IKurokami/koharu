@@ -488,7 +488,7 @@ fn parse_tagged_blocks(translation: &str, expected_blocks: usize) -> Result<Opti
             .map(|(next_offset, _, _)| next_offset)
             .unwrap_or(cursor.len());
         let content = cursor[..content_end].trim().to_string();
-        
+
         let mut clean_lines = Vec::new();
         for line in content.lines() {
             let trimmed = line.trim();

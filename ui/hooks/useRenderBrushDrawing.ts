@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 
 import { useCanvasDrawing, type CanvasDims } from '@/hooks/useCanvasDrawing'
 import type { PointerToDocumentFn } from '@/hooks/usePointerToDocument'
+import { putMask } from '@/lib/api/default/default'
 import type { Page } from '@/lib/api/schemas'
 import { invalidateScene } from '@/lib/io/scene'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
@@ -19,6 +20,10 @@ type RenderBrushOptions = {
   targetCanvasRef?: RefObject<HTMLCanvasElement | null>
 }
 
+function pngBytesToBlob(bytes: Uint8Array): Blob {
+  return new Blob([bytes as unknown as BlobPart], { type: 'image/png' })
+}
+
 /**
  * Color-brush over the `Mask { role: brushInpaint }` node. Stroke finalize
  * PUTs the updated mask to `/api/v1/pages/{id}/masks/brushInpaint`.
@@ -31,14 +36,16 @@ export function useRenderBrushDrawing({
   targetCanvasRef,
 }: RenderBrushOptions) {
   const isErasing = action === 'erase'
+  const brushSize = usePreferencesStore((state) => state.brushConfig.size)
+  const brushColor = usePreferencesStore((state) => state.brushConfig.color)
   const dims: CanvasDims | null = page
     ? { width: page.width, height: page.height, key: page.id }
     : null
 
   return useCanvasDrawing(dims, pointerToDocument, {
-    getColor: () => (isErasing ? '#000000' : usePreferencesStore.getState().brushConfig.color),
+    getColor: () => (isErasing ? '#000000' : brushColor),
     blendMode: isErasing ? 'destination-out' : 'source-over',
-    getBrushSize: () => usePreferencesStore.getState().brushConfig.size,
+    getBrushSize: () => brushSize,
     enabled,
     targetCanvasRef,
     clearAfterStroke: true,
@@ -46,16 +53,11 @@ export function useRenderBrushDrawing({
     onFinalizeFullCanvas: async (fullPng) => {
       if (!page) return
       try {
-        const res = await fetch(`/api/v1/pages/${page.id}/masks/brushInpaint`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'image/png' },
-          body: fullPng as unknown as BodyInit,
-        })
-        if (!res.ok) throw new Error(`brush PUT failed: ${res.status}`)
+        await putMask(page.id, 'brushInpaint', pngBytesToBlob(fullPng))
         await invalidateScene()
         useEditorUiStore.getState().setShowBrushLayer(true)
       } catch (e) {
-        useEditorUiStore.getState().showError(String(e))
+        useEditorUiStore.getState().showError(e instanceof Error ? e.message : String(e))
       }
     },
   })

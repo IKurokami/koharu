@@ -25,8 +25,8 @@ use utoipa::ToSchema;
 use crate::blob::BlobRef;
 use crate::font::{FontPrediction, TextDirection};
 use crate::scene::{
-    Chapter, ChapterId, ImageData, ImageRole, MaskData, MaskRole, Node, NodeId, NodeKind, NodeKindTag, Page, PageId,
-    ProjectStyle, Scene, TextData, Transform,
+    Chapter, ChapterId, ImageData, ImageRole, MaskData, MaskRole, Node, NodeId, NodeKind,
+    NodeKindTag, Page, PageId, ProjectStyle, Scene, TextData, Transform,
 };
 use crate::style::TextStyle;
 
@@ -303,10 +303,22 @@ impl Op {
                     name: patch.name.as_ref().map(|_| scene.project.name.clone()),
                     style: patch.style.as_ref().map(|_| scene.project.style.clone()),
                     updated_at: patch.updated_at.as_ref().map(|_| scene.project.updated_at),
-                    sync_dir: patch.sync_dir.as_ref().map(|_| scene.project.sync_dir.clone()),
-                    source_id: patch.source_id.as_ref().map(|_| scene.project.source_id.clone()),
-                    manga_id: patch.manga_id.as_ref().map(|_| scene.project.manga_id.clone()),
-                    manga_title: patch.manga_title.as_ref().map(|_| scene.project.manga_title.clone()),
+                    sync_dir: patch
+                        .sync_dir
+                        .as_ref()
+                        .map(|_| scene.project.sync_dir.clone()),
+                    source_id: patch
+                        .source_id
+                        .as_ref()
+                        .map(|_| scene.project.source_id.clone()),
+                    manga_id: patch
+                        .manga_id
+                        .as_ref()
+                        .map(|_| scene.project.manga_id.clone()),
+                    manga_title: patch
+                        .manga_title
+                        .as_ref()
+                        .map(|_| scene.project.manga_title.clone()),
                 };
                 if let Some(name) = &patch.name {
                     scene.project.name = name.clone();
@@ -429,7 +441,10 @@ impl Op {
             }
 
             Op::UpdateChapter { id, patch, prev } => {
-                let chapter = scene.chapters.get_mut(id).ok_or(OpError::ChapterNotFound(*id))?;
+                let chapter = scene
+                    .chapters
+                    .get_mut(id)
+                    .ok_or(OpError::ChapterNotFound(*id))?;
                 *prev = ChapterPatch {
                     name: patch.name.as_ref().map(|_| chapter.name.clone()),
                     order: patch.order.as_ref().map(|_| chapter.order),
@@ -573,10 +588,7 @@ impl Op {
                 prev_chapter: chapter.clone(),
                 prev_index: 0, // Not used strictly, populated by inverse on apply
             },
-            Op::RemoveChapter {
-                prev_chapter,
-                ..
-            } => Op::AddChapter {
+            Op::RemoveChapter { prev_chapter, .. } => Op::AddChapter {
                 chapter: prev_chapter.clone(),
             },
             Op::UpdateChapter { id, patch, prev } => Op::UpdateChapter {
@@ -738,7 +750,10 @@ fn ensure_same_page_set(pages: &indexmap::IndexMap<PageId, Page>, order: &[PageI
     Ok(())
 }
 
-fn ensure_same_chapter_set(chapters: &indexmap::IndexMap<ChapterId, Chapter>, order: &[ChapterId]) -> OpResult {
+fn ensure_same_chapter_set(
+    chapters: &indexmap::IndexMap<ChapterId, Chapter>,
+    order: &[ChapterId],
+) -> OpResult {
     if order.len() != chapters.len() {
         return Err(OpError::ReorderSetMismatch);
     }

@@ -145,7 +145,10 @@ export function MenuBar() {
   const runInpaint = async (pageId: string) => {
     const cfg = await getConfig()
     if (!cfg.pipeline?.inpainter) return
-    await startPipeline({ steps: [cfg.pipeline.inpainter], pages: [pageId] })
+    const steps = [cfg.pipeline.bubble_segmenter, cfg.pipeline.inpainter].filter(
+      (step): step is string => !!step,
+    )
+    await startPipeline({ steps, pages: [pageId] })
   }
 
   const exportItems: MenuItem[] = [

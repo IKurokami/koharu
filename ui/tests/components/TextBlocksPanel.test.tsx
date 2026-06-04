@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -86,5 +86,25 @@ describe('TextBlocksPanel', () => {
       systemPrompt: 'translate naturally',
       defaultFont: 'Arial',
     })
+  })
+
+  it('right-clicking a text block opens block actions without changing selection', async () => {
+    server.use(
+      http.get('/api/v1/scene.json', () => HttpResponse.json(sceneWithTextNodes())),
+      http.get('/api/v1/llm/current', () =>
+        HttpResponse.json({ status: 'ready', target: null, error: null }),
+      ),
+    )
+
+    renderWithQuery(<TextBlocksPanel />)
+
+    const firstCard = await screen.findByTestId('textblock-context-0')
+    fireEvent.contextMenu(firstCard)
+
+    expect(await screen.findByText('textBlocks.generateBlock')).toBeInTheDocument()
+    expect(useSelectionStore.getState().nodeIds.has('t1')).toBe(false)
+    expect(useSelectionStore.getState().nodeIds.has('t2')).toBe(true)
+    expect(screen.getByText('textBlocks.clearText')).toBeInTheDocument()
+    expect(screen.getByText('workspace.deleteBlock')).toBeInTheDocument()
   })
 })

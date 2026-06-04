@@ -842,6 +842,18 @@ fn get_runner_path(config: &koharu_app::config::AppConfig) -> std::path::PathBuf
         );
     }
 
+    // Force cached haruneko_repo FetchProvider.ts to be up to date with our BunFetchProvider patches!
+    let repo_dir = config.data.path.join("haruneko_repo");
+    if repo_dir.exists() {
+        let fetch_provider_path = repo_dir
+            .join("web")
+            .join("src")
+            .join("engine")
+            .join("platform")
+            .join("FetchProvider.ts");
+        let _ = std::fs::write(&fetch_provider_path, BUN_FETCH_PROVIDER);
+    }
+
     // 1. Check current directory
     if let Ok(cur) = std::env::current_dir() {
         let p = cur.join("scripts").join("haruneko_runner.js");
@@ -1931,89 +1943,43 @@ async fn download_manga_chapter(
 
         let runner_path = get_runner_path(&config);
 
-        let stdout = run_bun_command(
+        let temp_dir_holder;
+        let dest_dir = if let Some(ref r_dir) = raw_dir {
+            r_dir.clone()
+        } else {
+            temp_dir_holder = tempfile::tempdir().map_err(api_internal)?;
+            temp_dir_holder.path().to_path_buf()
+        };
+
+        run_bun_command(
             &runner_path,
             &[
-                "fetch_pages",
+                "download_pages",
                 script_path.as_str(),
                 &real_chapter_id,
                 &real_chapter_title,
                 &real_manga_id,
                 &req.chapter_name,
+                dest_dir.to_str().unwrap_or(""),
             ],
         )?;
 
-        let pages_val: serde_json::Value = serde_json::from_str(stdout.trim())
-            .map_err(|e| ApiError::internal(anyhow::anyhow!("Failed to parse pages JSON: {e}")))?;
-
-        let mut image_urls = Vec::new();
-        if let Some(arr) = pages_val.as_array() {
-            for item in arr {
-                let url = item
-                    .get("url")
-                    .and_then(|u| u.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let referer = item
-                    .get("referer")
-                    .and_then(|r| r.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                if !url.is_empty() {
-                    image_urls.push((url, referer));
-                }
-            }
-        }
-
-        if image_urls.is_empty() {
-            return Err(ApiError::internal(anyhow::anyhow!(
-                "Không tìm thấy trang ảnh nào trong chương này"
-            )));
-        }
-
-        let client = reqwest::Client::new();
-        let mut download_futures = Vec::new();
-        for (i, (img_url, referer_val)) in image_urls.into_iter().enumerate() {
-            let client_c = client.clone();
-            let idx = i + 1;
-            download_futures.push(async move {
-                    let mut req_builder = client_c.get(&img_url)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                    if !referer_val.is_empty() {
-                        req_builder = req_builder.header("Referer", &referer_val);
-                    }
-                    let resp = req_builder.send()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Request error: {e}"))?;
-                    if !resp.status().is_success() {
-                        return Err(anyhow::anyhow!("Failed to download page {idx}: HTTP {}", resp.status()));
-                    }
-                    let bytes = resp.bytes().await
-                        .map_err(|e| anyhow::anyhow!("Bytes error: {e}"))?
-                        .to_vec();
-                    let filename = format!("page_{:03}.png", idx);
-                    Ok::<(String, Vec<u8>), anyhow::Error>((filename, bytes))
-                });
-        }
-
         let mut downloaded_pages = Vec::new();
-        let results = futures::future::join_all(download_futures).await;
-        for res in results {
-            match res {
-                Ok((filename, bytes)) => {
-                    if let Ok(img) = image::load_from_memory(&bytes) {
-                        let (w, h) = img.dimensions();
-
-                        if let Some(ref r_dir) = raw_dir {
-                            let file_path = r_dir.join(&filename);
-                            let _ = std::fs::write(&file_path, &bytes);
+        if let Ok(entries) = std::fs::read_dir(&dest_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(filename_str) = path.file_name().and_then(|f| f.to_str()) {
+                        if filename_str.starts_with("page_") && filename_str.ends_with(".png") {
+                            if let Ok(bytes) = std::fs::read(&path) {
+                                if let Ok(img) = image::load_from_memory(&bytes) {
+                                    use image::GenericImageView;
+                                    let (w, h) = img.dimensions();
+                                    downloaded_pages.push((filename_str.to_string(), w, h, bytes));
+                                }
+                            }
                         }
-
-                        downloaded_pages.push((filename, w, h, bytes));
                     }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to download page: {e}");
                 }
             }
         }
@@ -2576,6 +2542,7 @@ const BUN_FETCH_PROVIDER: &str = r##"
 import { FetchProvider } from './FetchProviderCommon';
 import type { FeatureFlags } from '../FeatureFlags';
 import { parseHTML } from 'linkedom';
+import protobuf from 'protobufjs';
 
 const dummy = parseHTML('<a></a>');
 const LinkedomAnchor = dummy.HTMLAnchorElement;
@@ -2675,6 +2642,35 @@ class BunFetchProvider extends FetchProvider {
             body: request.body,
             signal: request.signal
         });
+    }
+
+    async FetchProto(request: Request, schema: string, messageTypePath: string): Promise<any> {
+        const response = await this.Fetch(request);
+        if (!response.ok) {
+            const bodyText = await response.text().catch(() => '');
+            throw new Error(`HTTP ${response.status} ${response.statusText || ''}: ${bodyText}`);
+        }
+        const serialized = new Uint8Array(await response.arrayBuffer());
+        const prototype = protobuf.parse(schema, { keepCase: true }).root.lookupType(messageTypePath);
+        return prototype.decode(serialized).toJSON();
+    }
+
+    async FetchRegex(request: Request, regex: RegExp): Promise<string[]> {
+        if (regex.flags.indexOf('g') === -1) {
+            throw new Error(`The provided RegExp must contain the global 'g' modifier!`);
+        }
+        const response = await this.Fetch(request);
+        if (!response.ok) {
+            const bodyText = await response.text().catch(() => '');
+            throw new Error(`HTTP ${response.status} ${response.statusText || ''}: ${bodyText}`);
+        }
+        const data = await response.text();
+        const result: string[] = [];
+        let match = undefined;
+        while (match = regex.exec(data)) {
+            result.push(match.at(1) || '');
+        }
+        return result;
     }
 }
 

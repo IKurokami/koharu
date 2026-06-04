@@ -146,6 +146,8 @@ async fn start_pipeline(
             message: tick.message,
         }));
     });
+    let cancel_for_run = cancel.clone();
+    let cancel_for_status = cancel.clone();
     tokio::spawn(async move {
         let result = pipeline::run(
             session_c,
@@ -155,24 +157,28 @@ async fn start_pipeline(
             llm_c,
             renderer_c,
             spec,
-            cancel,
+            cancel_for_run,
             Some(progress_sink),
             Some(warning_sink),
         )
         .await;
-        let (status, error) = match &result {
-            Ok(outcome) if outcome.warning_count == 0 => (JobStatus::Completed, None),
-            Ok(outcome) => (
-                JobStatus::CompletedWithErrors,
-                Some(format!(
-                    "{} step(s) failed; see warnings for details",
-                    outcome.warning_count
-                )),
-            ),
-            Err(e) if e.to_string().contains("cancelled") => (JobStatus::Cancelled, None),
-            Err(e) => {
-                tracing::warn!(operation_id = %op_id_c, "pipeline run failed: {e:#}");
-                (JobStatus::Failed, Some(format!("{e:#}")))
+        let (status, error) = if cancel_for_status.load(std::sync::atomic::Ordering::Relaxed) {
+            (JobStatus::Cancelled, None)
+        } else {
+            match &result {
+                Ok(outcome) if outcome.warning_count == 0 => (JobStatus::Completed, None),
+                Ok(outcome) => (
+                    JobStatus::CompletedWithErrors,
+                    Some(format!(
+                        "{} step(s) failed; see warnings for details",
+                        outcome.warning_count
+                    )),
+                ),
+                Err(e) if e.to_string().contains("cancelled") => (JobStatus::Cancelled, None),
+                Err(e) => {
+                    tracing::warn!(operation_id = %op_id_c, "pipeline run failed: {e:#}");
+                    (JobStatus::Failed, Some(format!("{e:#}")))
+                }
             }
         };
         app_c.jobs.insert(

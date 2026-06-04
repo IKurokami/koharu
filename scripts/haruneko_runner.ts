@@ -275,3 +275,55 @@ if (command === 'fetch_pages') {
     console.log(JSON.stringify(result));
     process.exit(0);
 }
+
+if (command === 'download_pages') {
+    const { Manga, Chapter } = await import(join(engineDir, 'providers', 'MangaPlugin.ts'));
+    const chapterId = args[2];
+    const chapterTitle = args[3] || "Chapter";
+    const mangaId = args[4] || "manga";
+    const mangaTitle = args[5] || "Manga";
+    const destDir = args[6];
+    
+    if (!chapterId || !destDir) {
+        console.error("Missing chapterId or destDir");
+        process.exit(1);
+    }
+    
+    const manga = new Manga(scraper, null, mangaId, mangaTitle);
+    const chapter = new Chapter(scraper, manga, chapterId, chapterTitle);
+    const pages = await scraper.FetchPages(chapter);
+    
+    const fs = require('fs');
+    const path = require('path');
+    if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+    }
+    
+    const result: any[] = [];
+    for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const idx = i + 1;
+        const filename = `page_${String(idx).padStart(3, '0')}.png`;
+        const filepath = path.join(destDir, filename);
+        
+        try {
+            const blob = await scraper.FetchImage(page, 0, new AbortController().signal);
+            const buffer = Buffer.from(await blob.arrayBuffer());
+            fs.writeFileSync(filepath, buffer);
+            result.push({
+                filename,
+                success: true
+            });
+        } catch (err: any) {
+            console.error(`Failed to download/decrypt page ${idx}:`, err.message || err);
+            result.push({
+                filename,
+                success: false,
+                error: err.message || String(err)
+            });
+        }
+    }
+    
+    console.log(JSON.stringify(result));
+    process.exit(0);
+}

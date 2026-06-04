@@ -138,6 +138,7 @@
     "deletePage": "Xóa trang",
     "insertPageBefore": "Chèn trang phía trước",
     "insertPageAfter": "Chèn trang phía sau",
+    "openPage": "Mở trang",
     "pageManager": {
       "title": "Quản lý trang",
       "description": "Kéo thả trang để sắp xếp lại."
@@ -327,7 +328,8 @@
     "readingOrderRtl": "Phải sang trái (RTL)",
     "readingOrderLtr": "Trái sang phải (LTR)",
     "readingOrderCustom": "Tùy chỉnh",
-    "clearText": "Xóa nội dung"
+    "clearText": "Xóa nội dung",
+    "generateBlock": "Dịch khối này"
   },
   "workspace": {
     "importPrompt": "Nhập một trang để bắt đầu chỉnh sửa.",
@@ -599,6 +601,11 @@
       "retranslate": "Dịch lại",
       "pageLabel": "Trang",
       "chapterLabel": "Chapter",
+      "copyText": "Copy",
+      "saveText": "Lưu TXT",
+      "noTranslatedText": "Không có text đã dịch để xuất.",
+      "copyTranslatedTextFailed": "Không copy được text đã dịch.",
+      "saveTranslatedTextFailed": "Không lưu được text đã dịch.",
       "clearPageTranslationOp": "Xóa bản dịch của trang",
       "clearChapterTranslationOp": "Xóa bản dịch của chapter"
     },

@@ -19,9 +19,9 @@ pub use engines::support;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use anyhow::{Result, bail};
-use koharu_core::{NodeId, Op, PageId, PipelineStep, NodeDataPatch, NodePatch, TextDataPatch};
 use crate::pipeline::engines::llm_translate::build_reinforced_system_prompt;
+use anyhow::{Result, bail};
+use koharu_core::{NodeDataPatch, NodeId, NodePatch, Op, PageId, PipelineStep, TextDataPatch};
 use koharu_runtime::RuntimeManager;
 
 /// Observer for pipeline progress. `step_id` is the engine id of the step
@@ -174,13 +174,21 @@ pub async fn run(
             }
 
             let scene_snap = session.scene_snapshot();
-            
+
             for page_chunk in pages.chunks(5) {
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
-                
-                let mut chunk_targets: Vec<(PageId, usize, String, String, bool, String, (NodeId, String))> = Vec::new();
+
+                let mut chunk_targets: Vec<(
+                    PageId,
+                    usize,
+                    String,
+                    String,
+                    bool,
+                    String,
+                    (NodeId, String),
+                )> = Vec::new();
                 for (page_index, page_id) in pages.iter().enumerate() {
                     if !page_chunk.contains(page_id) {
                         continue;
@@ -188,10 +196,16 @@ pub async fn run(
                     if !session.scene.read().pages.contains_key(page_id) {
                         continue;
                     }
-                    
+
                     let text_nodes_list = support::text_nodes(&scene_snap, *page_id);
-                    let page_name = scene_snap.pages.get(page_id).map(|p| p.name.clone()).unwrap_or_else(|| "Unknown Page".to_string());
-                    let chapter_name = scene_snap.pages.get(page_id)
+                    let page_name = scene_snap
+                        .pages
+                        .get(page_id)
+                        .map(|p| p.name.clone())
+                        .unwrap_or_else(|| "Unknown Page".to_string());
+                    let chapter_name = scene_snap
+                        .pages
+                        .get(page_id)
                         .and_then(|p| p.chapter_id)
                         .and_then(|cid| scene_snap.chapters.get(&cid))
                         .map(|ch| ch.name.clone())
@@ -202,7 +216,7 @@ pub async fn run(
                             if source_text.trim().is_empty() {
                                 continue;
                             }
-                            
+
                             let is_allowed = match spec.options.text_node_ids.as_deref() {
                                 Some(ids) => ids.contains(&node_id),
                                 None => true,
@@ -211,7 +225,12 @@ pub async fn run(
                                 continue;
                             }
 
-                            let translation = text_data.translation.as_deref().unwrap_or("").trim().to_string();
+                            let translation = text_data
+                                .translation
+                                .as_deref()
+                                .unwrap_or("")
+                                .trim()
+                                .to_string();
                             let already_translated = !translation.is_empty();
 
                             chunk_targets.push((
@@ -221,16 +240,22 @@ pub async fn run(
                                 chapter_name.clone(),
                                 already_translated,
                                 translation,
-                                (node_id, source_text.clone())
+                                (node_id, source_text.clone()),
                             ));
                         }
                     }
                 }
 
-                let has_untranslated = chunk_targets.iter().any(|(_, _, _, _, already_translated, _, _)| !*already_translated);
+                let has_untranslated = chunk_targets
+                    .iter()
+                    .any(|(_, _, _, _, already_translated, _, _)| !*already_translated);
 
                 if !chunk_targets.is_empty() && has_untranslated {
-                    let target_lang = spec.options.target_language.as_deref().unwrap_or("Vietnamese");
+                    let target_lang = spec
+                        .options
+                        .target_language
+                        .as_deref()
+                        .unwrap_or("Vietnamese");
                     let first_page_id = chunk_targets[0].0;
                     let reinforced_prompt = build_reinforced_system_prompt(
                         &scene_snap,
@@ -241,7 +266,19 @@ pub async fn run(
 
                     let mut structured_body = String::new();
                     let mut current_page_key: Option<(PageId, String)> = None;
-                    for (idx, (page_id, page_index, page_name, chapter_name, already_translated, translation, (_, source_text))) in chunk_targets.iter().enumerate() {
+                    for (
+                        idx,
+                        (
+                            page_id,
+                            page_index,
+                            page_name,
+                            chapter_name,
+                            already_translated,
+                            translation,
+                            (_, source_text),
+                        ),
+                    ) in chunk_targets.iter().enumerate()
+                    {
                         let page_key = (*page_id, page_name.clone());
                         if current_page_key.as_ref() != Some(&page_key) {
                             current_page_key = Some(page_key);
@@ -264,12 +301,28 @@ pub async fn run(
                         }
                     }
 
-                    let sources: Vec<String> = chunk_targets.iter().map(|(_, _, _, _, _, _, (_, s))| s.clone()).collect();
-                    
-                    match llm.translate_texts(&sources, Some(target_lang), Some(&reinforced_prompt), Some(&structured_body)).await {
+                    let sources: Vec<String> = chunk_targets
+                        .iter()
+                        .map(|(_, _, _, _, _, _, (_, s))| s.clone())
+                        .collect();
+
+                    match llm
+                        .translate_texts(
+                            &sources,
+                            Some(target_lang),
+                            Some(&reinforced_prompt),
+                            Some(&structured_body),
+                        )
+                        .await
+                    {
                         Ok(translations) => {
-                            let mut page_ops: std::collections::HashMap<PageId, Vec<Op>> = std::collections::HashMap::new();
-                            for ((page_id, _, _, _, already_translated, _, (node_id, _)), translation) in chunk_targets.into_iter().zip(translations) {
+                            let mut page_ops: std::collections::HashMap<PageId, Vec<Op>> =
+                                std::collections::HashMap::new();
+                            for (
+                                (page_id, _, _, _, already_translated, _, (node_id, _)),
+                                translation,
+                            ) in chunk_targets.into_iter().zip(translations)
+                            {
                                 if already_translated {
                                     continue;
                                 }
@@ -300,13 +353,17 @@ pub async fn run(
                                     label: format!("llm: page {page_id}"),
                                 };
                                 if let Err(err) = session.apply(batch) {
-                                    tracing::error!("Failed to apply translation batch for page {page_id}: {err}");
+                                    tracing::error!(
+                                        "Failed to apply translation batch for page {page_id}: {err}"
+                                    );
                                 }
                             }
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            let is_no_llm = err_str.contains("no LLM loaded") || err_str.contains("LLM is still loading") || err_str.contains("LLM failed to load");
+                            let is_no_llm = err_str.contains("no LLM loaded")
+                                || err_str.contains("LLM is still loading")
+                                || err_str.contains("LLM failed to load");
                             if is_no_llm {
                                 tracing::warn!("LLM translate skipped: {err_str}");
                                 if let Some(sink) = warnings.as_ref() {
@@ -314,7 +371,9 @@ pub async fn run(
                                         step_id: info.id.to_string(),
                                         page_index: 0,
                                         total_pages,
-                                        message: format!("Skipped: {err_str}. You can load LLM and translate these pages later."),
+                                        message: format!(
+                                            "Skipped: {err_str}. You can load LLM and translate these pages later."
+                                        ),
                                     });
                                 }
                             } else {
@@ -355,6 +414,9 @@ pub async fn run(
         } else {
             // Pre-load the engine once sequentially to prevent concurrent loading race conditions
             let _ = registry.get(&info.id, &runtime, cpu).await?;
+            if cancel.load(Ordering::Relaxed) {
+                bail!("cancelled");
+            }
 
             let semaphore = Arc::new(tokio::sync::Semaphore::new(4));
             let mut tasks = Vec::new();
@@ -363,7 +425,7 @@ pub async fn run(
                 if cancel.load(Ordering::Relaxed) {
                     bail!("cancelled");
                 }
-                
+
                 if !session.scene.read().pages.contains_key(page_id) {
                     completed += 1;
                     continue;
@@ -395,20 +457,30 @@ pub async fn run(
                 let info_produces = info.produces;
 
                 tasks.push(tokio::spawn(async move {
-                    let _permit = sem.acquire().await.map_err(|e| anyhow::anyhow!("failed to acquire semaphore: {e}"))?;
-                    
+                    let _permit = sem
+                        .acquire()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("failed to acquire semaphore: {e}"))?;
+                    if cancel.load(Ordering::Relaxed) {
+                        anyhow::bail!("cancelled");
+                    }
+
                     let scene_snap = session.scene_snapshot();
                     if let Some(page) = scene_snap.pages.get(&page_id) {
-                        let is_inpaint_or_render = info_produces.iter().any(|&art| {
-                            art == Artifact::Inpainted || art == Artifact::FinalRender
-                        });
-                        let already_ready = !is_inpaint_or_render && info_produces.iter().all(|&art| art.ready(page));
+                        let is_inpaint_or_render = info_produces
+                            .iter()
+                            .any(|&art| art == Artifact::Inpainted || art == Artifact::FinalRender);
+                        let already_ready = !is_inpaint_or_render
+                            && info_produces.iter().all(|&art| art.ready(page));
                         if already_ready {
                             return Ok::<_, anyhow::Error>((page_id, page_index, Vec::new()));
                         }
                     }
 
                     let engine = registry.get(&info_id, &runtime, cpu).await?;
+                    if cancel.load(Ordering::Relaxed) {
+                        anyhow::bail!("cancelled");
+                    }
                     let ctx = EngineCtx {
                         scene: &scene_snap,
                         page: page_id,
@@ -419,8 +491,11 @@ pub async fn run(
                         llm: &llm,
                         renderer: &renderer,
                     };
-                    
+
                     let ops = engine.run(ctx).await?;
+                    if cancel.load(Ordering::Relaxed) {
+                        anyhow::bail!("cancelled");
+                    }
                     Ok::<_, anyhow::Error>((page_id, page_index, ops))
                 }));
             }

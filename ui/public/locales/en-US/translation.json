@@ -137,6 +137,7 @@
     "deletePage": "Delete Page",
     "insertPageBefore": "Insert Page Before",
     "insertPageAfter": "Insert Page After",
+    "openPage": "Open Page",
     "pageManager": {
       "title": "Page Manager",
       "description": "Drag and drop pages to reorder them."
@@ -326,7 +327,8 @@
     "readingOrderRtl": "Right-to-Left (RTL)",
     "readingOrderLtr": "Left-to-Right (LTR)",
     "readingOrderCustom": "Custom",
-    "clearText": "Clear text"
+    "clearText": "Clear text",
+    "generateBlock": "Generate block"
   },
   "workspace": {
     "importPrompt": "Import a page to begin editing.",
@@ -598,6 +600,11 @@
       "retranslate": "Retranslate",
       "pageLabel": "Page",
       "chapterLabel": "Chapter",
+      "copyText": "Copy",
+      "saveText": "Save TXT",
+      "noTranslatedText": "No translated text to export.",
+      "copyTranslatedTextFailed": "Failed to copy translated text.",
+      "saveTranslatedTextFailed": "Failed to save translated text.",
       "clearPageTranslationOp": "Clear page translation",
       "clearChapterTranslationOp": "Clear chapter translation"
     },

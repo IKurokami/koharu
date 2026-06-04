@@ -24,16 +24,13 @@ pub fn build_reinforced_system_prompt(
     if let Some(user_prompt) = user_system_prompt {
         prompt.push_str(&format!("{}\n", user_prompt));
     }
-    
+
     prompt.push_str(&format!(
         "\nYour task is to translate the text blocks below into {}.\n",
         target_lang
     ));
 
-    prompt.push_str(&format!(
-        "Current Project: \"{}\"\n\n",
-        scene.project.name
-    ));
+    prompt.push_str(&format!("Current Project: \"{}\"\n\n", scene.project.name));
 
     let current_page = scene.pages.get(&current_page_id);
     let active_chapter_id = current_page.and_then(|p| p.chapter_id);
@@ -45,7 +42,8 @@ pub fn build_reinforced_system_prompt(
         if *page_id == current_page_id {
             continue;
         }
-        let chapter_name = page.chapter_id
+        let chapter_name = page
+            .chapter_id
             .and_then(|cid| scene.chapters.get(&cid))
             .map(|ch| ch.name.as_str())
             .unwrap_or("Unknown Chapter");
@@ -58,7 +56,11 @@ pub fn build_reinforced_system_prompt(
                     let ocr_trimmed = ocr.trim();
                     let trans_trimmed = trans.trim();
                     if !ocr_trimmed.is_empty() && !trans_trimmed.is_empty() {
-                        let page_idx = scene.pages.get_index_of(page_id).map(|idx| idx + 1).unwrap_or(0);
+                        let page_idx = scene
+                            .pages
+                            .get_index_of(page_id)
+                            .map(|idx| idx + 1)
+                            .unwrap_or(0);
                         let entry = format!(
                             "[{ch_name}][Page: {pg_name} (Index #{pg_idx})][Bubble #{bubble_idx}] Original: \"{ocr}\" -> Translated: \"{trans}\"",
                             ch_name = chapter_name,
@@ -111,7 +113,11 @@ impl Engine for Model {
             return Ok(Vec::new());
         }
 
-        let target_lang = ctx.options.target_language.as_deref().unwrap_or("Vietnamese");
+        let target_lang = ctx
+            .options
+            .target_language
+            .as_deref()
+            .unwrap_or("Vietnamese");
         let reinforced_prompt = build_reinforced_system_prompt(
             ctx.scene,
             ctx.page,
@@ -122,12 +128,7 @@ impl Engine for Model {
         let sources: Vec<String> = targets.iter().map(|(_, s)| s.clone()).collect();
         let translations = ctx
             .llm
-            .translate_texts(
-                &sources,
-                Some(target_lang),
-                Some(&reinforced_prompt),
-                None,
-            )
+            .translate_texts(&sources, Some(target_lang), Some(&reinforced_prompt), None)
             .await?;
 
         let mut ops = Vec::with_capacity(targets.len());
@@ -272,16 +273,16 @@ mod tests {
     fn should_build_reinforced_prompt_containing_translation_memory() {
         let first = node_id(11);
         let second = node_id(22);
-        
+
         let mut node1 = text_node(first, Some("こんにちは"));
         if let NodeKind::Text(data) = &mut node1.kind {
             data.translation = Some("Xin chào".to_string());
         }
-        
+
         let node2 = text_node(second, Some("さようなら"));
-        
+
         let mut scene = Scene::default();
-        
+
         // Page 1: current page, contains node2
         let page_id_1 = page_id();
         let mut page1 = Page::new("page1", 100, 100);
@@ -295,9 +296,9 @@ mod tests {
         page2.id = page_id_2;
         page2.nodes.insert(node1.id, node1);
         scene.pages.insert(page_id_2, page2);
-        
+
         let prompt = build_reinforced_system_prompt(&scene, page_id_1, "Vietnamese", None);
-        
+
         assert!(prompt.contains("Original: \"こんにちは\" -> Translated: \"Xin chào\""));
         assert!(prompt.contains("Vietnamese"));
     }

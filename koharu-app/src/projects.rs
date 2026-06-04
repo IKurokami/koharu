@@ -106,7 +106,8 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
         let abs = root.join(filename);
         let display = read_project_name(&abs).unwrap_or_else(|| id.to_string());
         let meta = read_project_meta(&abs);
-        let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+        let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty()
+        {
             "downloaded".to_string()
         } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
             "imported".to_string()
@@ -158,9 +159,12 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
 
                     let display = read_project_name(&path).unwrap_or_else(|| id.clone());
                     let meta = read_project_meta(&path);
-                    let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+                    let project_type = if meta.manga_id.is_some()
+                        && !meta.manga_id.as_ref().unwrap().is_empty()
+                    {
                         "downloaded".to_string()
-                    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+                    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty()
+                    {
                         "imported".to_string()
                     } else {
                         "manual".to_string()
@@ -322,17 +326,23 @@ pub fn read_project_meta(dir: &Utf8Path) -> koharu_core::ProjectMeta {
     let Ok(text) = fs::read_to_string(toml_path.as_std_path()) else {
         return meta;
     };
-    
+
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("name") {
             if let Some(rest) = trimmed.split('=').nth(1) {
-                meta.name = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                meta.name = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
             }
         }
         if trimmed.starts_with("sync_dir") {
             if let Some(rest) = trimmed.split('=').nth(1) {
-                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
                 if !val.is_empty() && val != "null" {
                     meta.sync_dir = Some(val);
                 }
@@ -340,7 +350,10 @@ pub fn read_project_meta(dir: &Utf8Path) -> koharu_core::ProjectMeta {
         }
         if trimmed.starts_with("manga_id") {
             if let Some(rest) = trimmed.split('=').nth(1) {
-                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
                 if !val.is_empty() && val != "null" {
                     meta.manga_id = Some(val);
                 }
@@ -348,7 +361,10 @@ pub fn read_project_meta(dir: &Utf8Path) -> koharu_core::ProjectMeta {
         }
         if trimmed.starts_with("manga_title") {
             if let Some(rest) = trimmed.split('=').nth(1) {
-                let val = rest.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
                 if !val.is_empty() && val != "null" {
                     meta.manga_title = Some(val);
                 }
@@ -362,18 +378,18 @@ fn remove_vietnamese_diacritics(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         let mapped = match ch {
-            'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ' | 'ặ' | 'ẳ' | 'ẵ' |
-            'À' | 'Á' | 'Ạ' | 'Ả' | 'Ã' | 'Â' | 'Ầ' | 'Ấ' | 'Ậ' | 'Ẩ' | 'Ẫ' | 'Ă' | 'Ằ' | 'Ắ' | 'Ặ' | 'Ẳ' | 'Ẵ' => 'a',
-            'è' | 'é' | 'ẹ' | 'ẻ' | 'ẽ' | 'ê' | 'ề' | 'ế' | 'ệ' | 'ể' | 'ễ' |
-            'È' | 'É' | 'Ẹ' | 'Ẻ' | 'Ẽ' | 'Ê' | 'Ề' | 'Ế' | 'Ệ' | 'Ể' | 'Ễ' => 'e',
-            'ì' | 'í' | 'ị' | 'ỉ' | 'ĩ' |
-            'Ì' | 'Í' | 'Ị' | 'Ỉ' | 'Ĩ' => 'i',
-            'ò' | 'ó' | 'ọ' | 'ỏ' | 'õ' | 'ô' | 'ồ' | 'ố' | 'ộ' | 'ổ' | 'ỗ' | 'ơ' | 'ờ' | 'ớ' | 'ợ' | 'ở' | 'ỡ' |
-            'Ò' | 'Ó' | 'Ọ' | 'Ỏ' | 'Õ' | 'Ô' | 'Ồ' | 'Ố' | 'Ộ' | 'Ổ' | 'Ỗ' | 'Ơ' | 'Ờ' | 'Ớ' | 'Ợ' | 'Ở' | 'Ỡ' => 'o',
-            'ù' | 'ú' | 'ụ' | 'ủ' | 'ũ' | 'ư' | 'ừ' | 'ứ' | 'ự' | 'ử' | 'ữ' |
-            'Ù' | 'Ú' | 'Ụ' | 'Ủ' | 'Ũ' | 'Ư' | 'Ừ' | 'Ứ' | 'Ự' | 'Ử' | 'Ữ' => 'u',
-            'ỳ' | 'ý' | 'ỵ' | 'ỷ' | 'ỹ' |
-            'Ỳ' | 'Ý' | 'Ỵ' | 'Ỷ' | 'Ỹ' => 'y',
+            'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ'
+            | 'ặ' | 'ẳ' | 'ẵ' | 'À' | 'Á' | 'Ạ' | 'Ả' | 'Ã' | 'Â' | 'Ầ' | 'Ấ' | 'Ậ' | 'Ẩ' | 'Ẫ'
+            | 'Ă' | 'Ằ' | 'Ắ' | 'Ặ' | 'Ẳ' | 'Ẵ' => 'a',
+            'è' | 'é' | 'ẹ' | 'ẻ' | 'ẽ' | 'ê' | 'ề' | 'ế' | 'ệ' | 'ể' | 'ễ' | 'È' | 'É' | 'Ẹ'
+            | 'Ẻ' | 'Ẽ' | 'Ê' | 'Ề' | 'Ế' | 'Ệ' | 'Ể' | 'Ễ' => 'e',
+            'ì' | 'í' | 'ị' | 'ỉ' | 'ĩ' | 'Ì' | 'Í' | 'Ị' | 'Ỉ' | 'Ĩ' => 'i',
+            'ò' | 'ó' | 'ọ' | 'ỏ' | 'õ' | 'ô' | 'ồ' | 'ố' | 'ộ' | 'ổ' | 'ỗ' | 'ơ' | 'ờ' | 'ớ'
+            | 'ợ' | 'ở' | 'ỡ' | 'Ò' | 'Ó' | 'Ọ' | 'Ỏ' | 'Õ' | 'Ô' | 'Ồ' | 'Ố' | 'Ộ' | 'Ổ' | 'Ỗ'
+            | 'Ơ' | 'Ờ' | 'Ớ' | 'Ợ' | 'Ở' | 'Ỡ' => 'o',
+            'ù' | 'ú' | 'ụ' | 'ủ' | 'ũ' | 'ư' | 'ừ' | 'ứ' | 'ự' | 'ử' | 'ữ' | 'Ù' | 'Ú' | 'Ụ'
+            | 'Ủ' | 'Ũ' | 'Ư' | 'Ừ' | 'Ứ' | 'Ự' | 'Ử' | 'Ữ' => 'u',
+            'ỳ' | 'ý' | 'ỵ' | 'ỷ' | 'ỹ' | 'Ỳ' | 'Ý' | 'Ỵ' | 'Ỷ' | 'Ỹ' => 'y',
             'đ' | 'Đ' => 'd',
             other => other,
         };
@@ -382,7 +398,7 @@ fn remove_vietnamese_diacritics(input: &str) -> String {
     out
 }
 
-/// Lowercase + keep ASCII alphanumerics + `-` + `_`; collapse whitespace to
+/// Lowercase + keep Unicode alphanumeric characters + `-` + `_`; collapse whitespace to
 /// `-`. Keeps the result filesystem-safe across Win/Mac/Linux without needing
 /// heavier slug libraries.
 fn slugify(input: &str) -> String {
@@ -390,20 +406,21 @@ fn slugify(input: &str) -> String {
     let mut out = String::with_capacity(normalized.len());
     let mut prev_dash = false;
     for ch in normalized.chars() {
-        let c = ch.to_ascii_lowercase();
-        if c.is_ascii_alphanumeric() {
-            out.push(c);
-            prev_dash = false;
-        } else if c == '-' || c == '_' {
-            if !out.is_empty() && !prev_dash {
+        for c in ch.to_lowercase() {
+            if c.is_alphanumeric() {
+                out.push(c);
+                prev_dash = false;
+            } else if c == '-' || c == '_' {
+                if !out.is_empty() && !prev_dash {
+                    out.push('-');
+                    prev_dash = true;
+                }
+            } else if c.is_whitespace() && !out.is_empty() && !prev_dash {
                 out.push('-');
                 prev_dash = true;
             }
-        } else if c.is_whitespace() && !out.is_empty() && !prev_dash {
-            out.push('-');
-            prev_dash = true;
+            // Other chars dropped silently.
         }
-        // Other chars dropped silently.
     }
     let _ = SystemTime::now().duration_since(UNIX_EPOCH); // silence unused import warn
     while out.ends_with('-') {
@@ -421,8 +438,9 @@ mod tests {
         assert_eq!(slugify("My Project"), "my-project");
         assert_eq!(slugify("  leading and trailing  "), "leading-and-trailing");
         assert_eq!(slugify("under_score_already"), "under-score-already");
-        assert_eq!(slugify("你好 hello"), "hello");
+        assert_eq!(slugify("你好 hello"), "你好-hello");
         assert_eq!(slugify("--dashes--"), "dashes");
         assert_eq!(slugify("chạy bộ"), "chay-bo");
+        assert_eq!(slugify("じょしこうせい"), "じょしこうせい");
     }
 }

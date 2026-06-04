@@ -1,7 +1,7 @@
 'use client'
 
 import { AlertTriangleIcon, CircleXIcon } from 'lucide-react'
-import { type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -152,7 +152,16 @@ function JobWarnings({ warnings, t }: { warnings: JobWarningEvent[]; t: Translat
   )
 }
 
-function JobCard({ job, onCancel, t }: { job: JobEntry; onCancel: () => void; t: TranslateFunc }) {
+function JobCard({
+  job,
+  onCancel,
+  t,
+}: {
+  job: JobEntry
+  onCancel: () => Promise<void> | void
+  t: TranslateFunc
+}) {
+  const [isCancelling, setIsCancelling] = useState(false)
   const progress: PipelineProgress | undefined = job.progress
   const percent = clampProgress(progress?.overallPercent)
   const stepLabels: Record<string, string> = {
@@ -195,10 +204,14 @@ function JobCard({ job, onCancel, t }: { job: JobEntry; onCancel: () => void; t:
               data-testid='operation-cancel'
               variant='outline'
               size='sm'
-              onClick={onCancel}
+              disabled={isCancelling}
+              onClick={() => {
+                setIsCancelling(true)
+                void Promise.resolve(onCancel()).finally(() => setIsCancelling(false))
+              }}
               className='text-xs font-semibold'
             >
-              {t('operations.cancel')}
+              {isCancelling ? t('operations.cancelling') : t('operations.cancel')}
             </Button>
           </div>
         </div>
@@ -229,7 +242,21 @@ export function ActivityBubble() {
     <div className='pointer-events-auto fixed right-6 bottom-6 z-100 flex w-80 max-w-[calc(100%-1.5rem)] flex-col gap-3'>
       {errorMessage && <ErrorCard message={errorMessage} onDismiss={clearUiError} t={t} />}
       {runningJobs.map((job) => (
-        <JobCard key={job.id} job={job} onCancel={() => void cancelOperation(job.id)} t={t} />
+        <JobCard
+          key={job.id}
+          job={job}
+          onCancel={async () => {
+            try {
+              await cancelOperation(job.id)
+              useJobsStore.getState().finished(job.id, 'cancelled', null)
+            } catch (error) {
+              useEditorUiStore
+                .getState()
+                .showError(error instanceof Error ? error.message : String(error))
+            }
+          }}
+          t={t}
+        />
       ))}
       {activeDownloads.map((d) => {
         const percent =
