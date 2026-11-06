@@ -257,22 +257,22 @@ export function SettingsDialog({
     if (!appConfig) return
     const path = dataPathDraft.trim()
     if (!path) {
-      setStorageSettingsError('Required')
+      setStorageSettingsError(t('settings.storageRequired'))
       return
     }
     const connectTimeout = Number.parseInt(httpConnectTimeoutDraft.trim(), 10)
     if (!Number.isInteger(connectTimeout) || connectTimeout <= 0) {
-      setStorageSettingsError('Invalid HTTP connect timeout')
+      setStorageSettingsError(t('settings.invalidHttpConnectTimeout'))
       return
     }
     const readTimeout = Number.parseInt(httpReadTimeoutDraft.trim(), 10)
     if (!Number.isInteger(readTimeout) || readTimeout <= 0) {
-      setStorageSettingsError('Invalid HTTP read timeout')
+      setStorageSettingsError(t('settings.invalidHttpReadTimeout'))
       return
     }
     const maxRetries = Number.parseInt(httpMaxRetriesDraft.trim(), 10)
     if (!Number.isInteger(maxRetries) || maxRetries < 0) {
-      setStorageSettingsError('Invalid HTTP max retries')
+      setStorageSettingsError(t('settings.invalidHttpMaxRetries'))
       return
     }
 
@@ -289,18 +289,18 @@ export function SettingsDialog({
     })
     setIsSavingStorageSettings(false)
     if (!saved) {
-      setStorageSettingsError('Failed')
+      setStorageSettingsError(t('settings.storageSaveFailed'))
       return
     }
     if (!isTauri()) {
-      setStorageSettingsError('Restart manually')
+      setStorageSettingsError(t('settings.restartManually'))
       return
     }
     try {
       const { relaunch } = await import('@tauri-apps/plugin-process')
       await relaunch()
     } catch {
-      setStorageSettingsError('Restart manually')
+      setStorageSettingsError(t('settings.restartManually'))
     }
   }
 
@@ -316,7 +316,7 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='flex h-[600px] max-h-[85vh] w-[760px] max-w-[92vw] flex-col gap-0 overflow-hidden p-0'>
         <DialogTitle className='sr-only'>{t('settings.title')}</DialogTitle>
-        <DialogDescription className='sr-only'>Settings</DialogDescription>
+        <DialogDescription className='sr-only'>{t('settings.title')}</DialogDescription>
 
         <div className='flex h-full'>
           {/* Sidebar */}
@@ -1080,7 +1080,9 @@ function KeybindsPane() {
                       ) : currentVal ? (
                         renderShortcutKeys(currentVal, 'bg-background')
                       ) : (
-                        <span className='text-xs text-muted-foreground'>NONE</span>
+                        <span className='text-xs text-muted-foreground'>
+                          {t('settings.shortcutNone')}
+                        </span>
                       )}
                     </div>
                   </Button>

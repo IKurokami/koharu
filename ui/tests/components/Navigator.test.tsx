@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -59,6 +59,19 @@ describe('Navigator', () => {
     const first = await screen.findByTestId('navigator-page-0')
     await userEvent.click(first)
     expect(useSelectionStore.getState().pageId).toBe('a')
+  })
+
+  it('right-clicking a preview opens page actions without changing selection', async () => {
+    server.use(http.get('/api/v1/scene.json', () => HttpResponse.json(sceneWithPages(['a', 'b']))))
+    renderWithQuery(<Navigator />)
+    await waitFor(() => expect(useSelectionStore.getState().pageId).toBe('a'))
+    const second = await screen.findByTestId('navigator-page-1')
+    fireEvent.contextMenu(second)
+
+    expect(await screen.findByText('navigator.openPage')).toBeInTheDocument()
+    expect(useSelectionStore.getState().pageId).toBe('a')
+    expect(screen.getByText('navigator.insertPageAfter')).toBeInTheDocument()
+    expect(screen.getByText('navigator.deletePage')).toBeInTheDocument()
   })
 
   it('exposes total page count via data attribute', async () => {

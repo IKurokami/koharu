@@ -250,11 +250,12 @@ function TextBlockItem({
       }}
     >
       <div
-        className={`absolute inset-0 rounded-md ${
+        className={`absolute inset-0 rounded-md border-solid ${
           selected
             ? 'border-[3px] border-primary bg-primary/15'
             : 'border-2 border-rose-400/60 bg-rose-400/5'
         }`}
+        style={{ borderStyle: 'solid' }}
       />
       <div
         className={`pointer-events-none absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white shadow ${

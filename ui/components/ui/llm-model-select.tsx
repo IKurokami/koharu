@@ -3,6 +3,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { CheckIcon, ChevronDownIcon, SearchIcon } from 'lucide-react'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -46,6 +47,7 @@ export function LlmModelSelect({
   onChange,
   ...props
 }: LlmModelSelectProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -103,7 +105,10 @@ export function LlmModelSelect({
           triggerClassName,
         )}
       >
-        <TriggerLabel selected={selected} placeholder={placeholder} />
+        <TriggerLabel
+          selected={selected}
+          placeholder={placeholder ?? t('llmModelSelect.selectPlaceholder')}
+        />
         <ChevronDownIcon className='size-3.5 shrink-0 opacity-60' />
       </PopoverTrigger>
       <PopoverContent
@@ -125,7 +130,7 @@ export function LlmModelSelect({
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder='Search models…'
+            placeholder={t('llmModelSelect.searchPlaceholder')}
             className='w-full bg-transparent py-1.5 pr-2 pl-7 text-xs outline-none placeholder:text-muted-foreground/70'
           />
         </div>
@@ -161,7 +166,7 @@ export function LlmModelSelect({
             data-testid='llm-model-empty'
             className='px-2 py-6 text-center text-xs text-muted-foreground'
           >
-            No models found
+            {t('llmModelSelect.noModelsFound')}
           </div>
         )}
       </PopoverContent>
@@ -186,12 +191,10 @@ function TriggerLabel({
   placeholder,
 }: {
   selected: LlmModelOption | undefined
-  placeholder: string | undefined
+  placeholder: string
 }) {
   if (!selected) {
-    return (
-      <span className='truncate text-muted-foreground'>{placeholder ?? 'Select a model…'}</span>
-    )
+    return <span className='truncate text-muted-foreground'>{placeholder}</span>
   }
   const { model, provider } = selected
   return (

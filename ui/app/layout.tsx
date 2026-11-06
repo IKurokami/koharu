@@ -34,7 +34,7 @@ function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang='en-US' suppressHydrationWarning>
+    <html lang='vi-VN' suppressHydrationWarning>
       <body
         className={`${inter.variable} ${notoSansSC.variable} ${notoSansTC.variable} ${notoSansJP.variable} antialiased`}
       >

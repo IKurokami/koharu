@@ -11,6 +11,8 @@ import {
   getGetConfigQueryKey,
   getGetCurrentLlmQueryKey,
   getGetSceneJsonQueryKey,
+  getListProjectsQueryKey,
+  importDirectory,
   importProject,
   patchConfig,
   putCurrentProject,
@@ -24,6 +26,7 @@ import type {
   ConfigPatch,
   CreateProjectRequest,
   ExportProjectRequest,
+  ImportDirectoryRequest,
   Op,
   OpenProjectRequest,
   ProjectSummary,
@@ -47,6 +50,9 @@ import { useSelectionStore } from '@/lib/stores/selectionStore'
 
 export const invalidateScene = () =>
   queryClient.invalidateQueries({ queryKey: getGetSceneJsonQueryKey() })
+
+export const invalidateProjects = () =>
+  queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() })
 
 const invalidateConfig = () => queryClient.invalidateQueries({ queryKey: getGetConfigQueryKey() })
 
@@ -120,7 +126,7 @@ async function runAutoRender(pageId: string): Promise<void> {
     const renderer = cfg.pipeline?.renderer
     if (!renderer) return
     const defaultFont = usePreferencesStore.getState().defaultFont
-    await startPipeline({ steps: [renderer], pages: [pageId], defaultFont })
+    await startPipeline({ steps: [renderer], pages: [pageId], defaultFont, draft: true })
   } catch (err) {
     // Auto-render failures shouldn't disturb the editing flow; users can
     // always run Render manually from the toolbar / menu.
@@ -147,25 +153,35 @@ export function selectAllTextNodesOnCurrentPage(): void {
 export async function createAndOpenProject(req: CreateProjectRequest): Promise<ProjectSummary> {
   const summary = await createProject(req)
   await invalidateScene()
+  await invalidateProjects()
   return summary
 }
 
 export async function switchProject(req: OpenProjectRequest): Promise<void> {
   await putCurrentProject(req)
   await invalidateScene()
+  await invalidateProjects()
 }
 
 export async function closeProject(): Promise<void> {
   await deleteCurrentProject()
   await invalidateScene()
+  await invalidateProjects()
 }
 
 // Pages import ---------------------------------------------------------------
 
-export async function uploadPages(files: File[], replace: boolean): Promise<string[]> {
+export async function uploadPages(files: File[], replace: boolean, at?: number): Promise<string[]> {
   const form = new FormData()
   for (const file of files) form.append('file', file, file.name)
   form.append('replace', replace ? 'true' : 'false')
+  const chapterId = useSelectionStore.getState().chapterId
+  if (chapterId && chapterId !== 'all-chapters') {
+    form.append('chapterId', chapterId)
+  }
+  if (at !== undefined) {
+    form.append('at', String(at))
+  }
   const res = await createPages({ body: form })
   await invalidateScene()
   return res.pages
@@ -176,19 +192,25 @@ export async function uploadPages(files: File[], replace: boolean): Promise<stri
  * the per-file `readFile` IPC round-trip, skips JS-side buffering, skips
  * multipart upload — the Rust side reads + decodes + hashes in parallel.
  */
-export async function uploadPagesByPaths(paths: string[], replace: boolean): Promise<string[]> {
-  const res = await createPagesFromPaths({ paths, replace })
+export async function uploadPagesByPaths(paths: string[], replace: boolean, at?: number): Promise<string[]> {
+  const chapterId = useSelectionStore.getState().chapterId
+  const finalChapterId = chapterId && chapterId !== 'all-chapters' ? chapterId : undefined
+  const res = await createPagesFromPaths({ paths, replace, chapterId: finalChapterId, at })
   await invalidateScene()
   return res.pages
 }
 
 export async function uploadKhrArchive(file: File): Promise<ProjectSummary> {
-  const bytes = await file.arrayBuffer()
-  const summary = await importProject({
-    body: bytes,
-    headers: { 'Content-Type': 'application/zip' },
-  })
+  const summary = await importProject(file)
   await invalidateScene()
+  await invalidateProjects()
+  return summary
+}
+
+export async function importFolderAsProject(req: ImportDirectoryRequest): Promise<ProjectSummary> {
+  const summary = await importDirectory(req)
+  await invalidateScene()
+  await invalidateProjects()
   return summary
 }
 
@@ -238,4 +260,26 @@ export async function updateConfig(patch: ConfigPatch): Promise<void> {
 
 export function invalidateCurrentLlm(): Promise<void> {
   return invalidateLlm()
+}
+
+export async function deleteProjectById(id: string): Promise<void> {
+  const res = await fetch(`/api/v1/projects/${id}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to delete project: ${res.statusText}`)
+  }
+  await invalidateProjects()
+}
+
+export async function renameProjectById(id: string, name: string): Promise<void> {
+  const res = await fetch(`/api/v1/projects/${id}/name`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to rename project: ${res.statusText}`)
+  }
+  await invalidateProjects()
 }

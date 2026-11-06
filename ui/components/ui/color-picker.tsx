@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { HexColorInput, HexColorPicker } from 'react-colorful'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -47,6 +48,7 @@ export function ColorPicker({
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledBy,
 }: ColorPickerProps) {
+  const { t } = useTranslation()
   const [localColor, setLocalColor] = useState(value)
   const dragging = useRef(false)
 
@@ -123,7 +125,7 @@ export function ColorPicker({
               data-testid={inputTestId}
               spellCheck={false}
               disabled={disabled}
-              aria-label='Hex color code'
+              aria-label={t('colorPicker.hexColorCode')}
               className='h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-mono text-xs uppercase shadow-xs transition outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
               onChange={(color) => {
                 const normalized = normalizeHex(color)
@@ -144,7 +146,7 @@ export function ColorPicker({
                   void handlePickFromScreen()
                 }}
               >
-                Pick
+                {t('colorPicker.pick')}
               </Button>
             )}
           </div>

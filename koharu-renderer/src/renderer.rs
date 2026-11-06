@@ -60,7 +60,7 @@ impl RasterOptions {
     }
 
     fn scale(self) -> u32 {
-        self.supersampling_factor.clamp(2, MAX_SUPERSAMPLING_FACTOR)
+        self.supersampling_factor.clamp(1, MAX_SUPERSAMPLING_FACTOR)
     }
 }
 
@@ -516,6 +516,12 @@ fn surface_to_image(
     let raster_height = surface.height();
     let pixels = surface.data().to_vec();
 
+    if raster_width == width && raster_height == height {
+        let mut pixels = pixels;
+        unpremultiply_rgba(&mut pixels);
+        return RgbaImage::from_raw(width, height, pixels).context("failed to build RgbaImage");
+    }
+
     let raster_img = RgbaImage::from_raw(raster_width, raster_height, pixels)
         .context("failed to build supersampled RgbaImage")?;
     let img = imageops::resize(&raster_img, width, height, downsample_filter.into());
@@ -706,8 +712,8 @@ mod tests {
 
     #[test]
     fn supersampling_factor_is_bounded() {
-        assert_eq!(RasterOptions::supersampled(0).scale(), 2);
-        assert_eq!(RasterOptions::supersampled(1).scale(), 2);
+        assert_eq!(RasterOptions::supersampled(0).scale(), 1);
+        assert_eq!(RasterOptions::supersampled(1).scale(), 1);
         assert_eq!(
             RasterOptions::supersampled(99).scale(),
             MAX_SUPERSAMPLING_FACTOR

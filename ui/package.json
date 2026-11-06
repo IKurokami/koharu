@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "generate:api": "orval",
@@ -70,8 +70,6 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@faker-js/faker": "^10.4.0",
-    "@mswjs/data": "^0.16.2",
     "@tailwindcss/postcss": "^4.3.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -1,8 +1,11 @@
 'use client'
 
 import {
+  BookOpenIcon,
+  CopyIcon,
   LanguagesIcon,
   LoaderCircleIcon,
+  SaveIcon,
   ScanIcon,
   ScanTextIcon,
   TypeIcon,
@@ -24,6 +27,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
+import { textNodesOf } from '@/hooks/useCurrentPage'
+import { useScene } from '@/hooks/useScene'
 import {
   deleteCurrentLlm,
   getConfig,
@@ -33,6 +38,16 @@ import {
   useGetCurrentLlm,
 } from '@/lib/api/default/default'
 import type { LlmCatalog, LlmCatalogModel, LlmProviderCatalog, LlmTarget } from '@/lib/api/schemas'
+import { saveBlob } from '@/lib/io/saveBlob'
+import { applyOp, queueAutoRender } from '@/lib/io/scene'
+import {
+  formatTranslatedTextExport,
+  hasTranslatedText,
+  resolveTranslatedTextPages,
+  translatedTextDefaultFilename,
+  type TranslatedTextExportScope,
+} from '@/lib/io/translatedText'
+import { ops } from '@/lib/ops'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
 import { useJobsStore } from '@/lib/stores/jobsStore'
 import { usePreferencesStore } from '@/lib/stores/preferencesStore'
@@ -64,15 +79,50 @@ const flattenCatalogModels = (catalog?: LlmCatalog): SelectableLlmModel[] => [
     .flatMap((p) => p.models.map((model) => ({ model, provider: p }))),
 ]
 
+async function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('Clipboard copy command failed')
+    }
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function CanvasToolbar() {
+  const setWebtoonPreviewOpen = useEditorUiStore((s) => s.setWebtoonPreviewOpen)
+  const { t } = useTranslation()
   return (
     <div className='flex items-center gap-2 border-b border-border/60 bg-card px-3 py-2 text-xs text-foreground'>
       <WorkflowButtons />
       <div className='flex-1' />
+      <Button
+        variant='outline'
+        size='xs'
+        className='gap-1.5 border-border/60 font-medium transition-all duration-200 hover:bg-accent/80 hover:text-accent-foreground'
+        onClick={() => setWebtoonPreviewOpen(true)}
+      >
+        <BookOpenIcon className='size-3.5' />
+        {t('webtoon.preview')}
+      </Button>
+      <TranslationToolPopover />
       <LlmStatusPopover />
     </div>
   )
@@ -107,11 +157,10 @@ function WorkflowButtons() {
    * the Rust `PipelineConfig`, so we trust what the server returns and
    * never hard-code fallbacks here.
    *
-   * Detect is the only multi-engine button; it bundles detector +
-   * segmenter + font-detector so the subsequent single-engine steps
-   * (OCR / Inpaint / Render) find their inputs already on the page. The
-   * backend driver skips any step whose artifact is already satisfied,
-   * so re-running is idempotent.
+   * Detect is the broad setup button; it bundles detector + text segmenter +
+   * bubble segmenter + font detector so later steps find their inputs already
+   * on the page. The backend driver skips any step whose artifact is already
+   * satisfied, so re-running is idempotent.
    */
   const runStep = async (
     pick: (p: NonNullable<Awaited<ReturnType<typeof getConfig>>['pipeline']>) => string[],
@@ -144,7 +193,7 @@ function WorkflowButtons() {
   ]
   const ocrChain: PipelinePick = (p) => [p.ocr!]
   const translateChain: PipelinePick = (p) => [p.translator!]
-  const inpaintChain: PipelinePick = (p) => [p.inpainter!]
+  const inpaintChain: PipelinePick = (p) => [p.bubble_segmenter!, p.inpainter!]
   const renderChain: PipelinePick = (p) => [p.renderer!]
 
   const isDetecting = currentStep === 'detect'
@@ -310,7 +359,6 @@ function LlmStatusPopover() {
       selectedLanguage: nextLanguage,
     })
   }, [llmModels, llmSelectedLanguage, selectedModel?.model, selectedTarget])
-
   const indicatorBusy = busy || llmLoading
 
   return (
@@ -345,7 +393,7 @@ function LlmStatusPopover() {
                 : {}
             }
           />
-          LLM
+          {t('llm.title')}
         </button>
       </PopoverTrigger>
       <PopoverContent align='end' className='w-[280px] p-0' data-testid='llm-popover'>
@@ -381,7 +429,7 @@ function LlmStatusPopover() {
         <div className='px-3'>
           <Separator />
         </div>
-        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-3'>
+        <div className='flex flex-col gap-1 px-3 pt-2.5 pb-2'>
           <span className='text-[10px] font-medium text-muted-foreground uppercase'>
             {t('llm.translationSettings')}
           </span>
@@ -412,9 +460,292 @@ function LlmStatusPopover() {
               value={customSystemPrompt ?? ''}
               onChange={(e) => setCustomSystemPrompt(e.target.value || undefined)}
               placeholder={t('llm.systemPromptPlaceholder')}
-              rows={5}
+              rows={3}
               className='min-h-0 resize-y px-2 py-1.5 text-xs leading-snug md:text-xs'
             />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function TranslationToolPopover() {
+  const { t } = useTranslation()
+  const pageId = useSelectionStore((s) => s.pageId)
+  const selectedChapterId = useSelectionStore((s) => s.chapterId)
+  const { scene } = useScene()
+  const isProcessing = useIsProcessing()
+  const { data: llmState } = useGetCurrentLlm()
+  const llmReady = llmState?.status === 'ready'
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const currentPage = pageId && scene ? (scene.pages[pageId] ?? null) : null
+  const pageExportPages = currentPage ? [currentPage] : []
+  const chapterExportPages =
+    scene && currentPage
+      ? resolveTranslatedTextPages(scene, currentPage, selectedChapterId, 'chapter')
+      : []
+  const canExportPageText = hasTranslatedText(pageExportPages)
+  const canExportChapterText = hasTranslatedText(chapterExportPages)
+
+  const exportPagesForScope = (scope: TranslatedTextExportScope) =>
+    scope === 'page' ? pageExportPages : chapterExportPages
+
+  const handleCopyTranslatedText = async (scope: TranslatedTextExportScope) => {
+    if (!scene || !currentPage) return
+    const pages = exportPagesForScope(scope)
+    if (!hasTranslatedText(pages)) {
+      useEditorUiStore.getState().showError(t('canvas.toolbar.noTranslatedText'))
+      return
+    }
+
+    try {
+      await writeClipboardText(formatTranslatedTextExport(pages, scope))
+    } catch (err) {
+      console.error('[text-export] Failed to copy translated text:', err)
+      useEditorUiStore.getState().showError(t('canvas.toolbar.copyTranslatedTextFailed'))
+    }
+  }
+
+  const handleSaveTranslatedText = async (scope: TranslatedTextExportScope) => {
+    if (!scene || !currentPage) return
+    const pages = exportPagesForScope(scope)
+    if (!hasTranslatedText(pages)) {
+      useEditorUiStore.getState().showError(t('canvas.toolbar.noTranslatedText'))
+      return
+    }
+
+    try {
+      const text = formatTranslatedTextExport(pages, scope)
+      const defaultName = translatedTextDefaultFilename(
+        scene,
+        currentPage,
+        selectedChapterId,
+        scope,
+      )
+      await saveBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), defaultName)
+    } catch (err) {
+      console.error('[text-export] Failed to save translated text:', err)
+      useEditorUiStore.getState().showError(t('canvas.toolbar.saveTranslatedTextFailed'))
+    }
+  }
+
+  const handleClearPage = async () => {
+    if (!pageId || !scene) return
+    const page = scene.pages[pageId]
+    if (!page) return
+    const textNodes = textNodesOf(page)
+    const clearOps = textNodes.map((node) =>
+      ops.updateNode(pageId, node.id, {
+        data: {
+          text: {
+            translation: null,
+            sprite: null,
+            spriteTransform: null,
+            renderedDirection: null,
+          },
+        } as never,
+      }),
+    )
+    if (clearOps.length > 0) {
+      await applyOp(ops.batch(t('canvas.toolbar.clearPageTranslationOp'), clearOps))
+      queueAutoRender(pageId)
+    }
+  }
+
+  const handleRetranslatePage = async () => {
+    if (!pageId || !scene) return
+    await handleClearPage()
+    const cfg = await getConfig()
+    if (!cfg.pipeline) return
+    const translator = cfg.pipeline.translator
+    const renderer = cfg.pipeline.renderer
+    if (!translator || !renderer) return
+    const editor = useEditorUiStore.getState()
+    const prefs = usePreferencesStore.getState()
+    await startPipeline({
+      steps: [translator, renderer],
+      pages: [pageId],
+      targetLanguage: editor.selectedLanguage,
+      systemPrompt: prefs.customSystemPrompt,
+      defaultFont: prefs.defaultFont,
+      readingOrder: editor.readingOrder === 'custom' ? undefined : editor.readingOrder,
+    })
+  }
+
+  const handleClearChapter = async () => {
+    if (!pageId || !scene) return
+    const currentPage = scene.pages[pageId]
+    if (!currentPage) return
+    const currentChapterId = currentPage.chapterId
+
+    const chapterPages = Object.values(scene.pages).filter((p) => p.chapterId === currentChapterId)
+
+    const clearOps = chapterPages.flatMap((p) =>
+      textNodesOf(p).map((node) =>
+        ops.updateNode(p.id, node.id, {
+          data: {
+            text: {
+              translation: null,
+              sprite: null,
+              spriteTransform: null,
+              renderedDirection: null,
+            },
+          } as never,
+        }),
+      ),
+    )
+
+    if (clearOps.length > 0) {
+      await applyOp(ops.batch(t('canvas.toolbar.clearChapterTranslationOp'), clearOps))
+      queueAutoRender(pageId)
+    }
+  }
+
+  const handleRetranslateChapter = async () => {
+    if (!pageId || !scene) return
+    const currentPage = scene.pages[pageId]
+    if (!currentPage) return
+    const currentChapterId = currentPage.chapterId
+
+    const chapterPages = Object.values(scene.pages).filter((p) => p.chapterId === currentChapterId)
+    const chapterPageIds = chapterPages.map((p) => p.id)
+
+    await handleClearChapter()
+
+    const cfg = await getConfig()
+    if (!cfg.pipeline) return
+    const translator = cfg.pipeline.translator
+    const renderer = cfg.pipeline.renderer
+    if (!translator || !renderer) return
+    const editor = useEditorUiStore.getState()
+    const prefs = usePreferencesStore.getState()
+    await startPipeline({
+      steps: [translator, renderer],
+      pages: chapterPageIds,
+      targetLanguage: editor.selectedLanguage,
+      systemPrompt: prefs.customSystemPrompt,
+      defaultFont: prefs.defaultFont,
+      readingOrder: editor.readingOrder === 'custom' ? undefined : editor.readingOrder,
+    })
+  }
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <PopoverTrigger asChild>
+        <button
+          data-testid='translation-tool-trigger'
+          className='flex h-6 cursor-pointer items-center gap-1.5 rounded-full bg-muted px-2.5 text-[11px] font-medium text-muted-foreground shadow-sm ring-1 ring-border/50 transition hover:opacity-80'
+        >
+          <LanguagesIcon className='size-3.5' />
+          {t('canvas.toolbar.translationTool')}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align='end' className='w-[280px] p-0' data-testid='translation-tool-popover'>
+        <div className='flex flex-col gap-1.5 bg-muted/20 px-3 pt-2 pb-3'>
+          <span className='text-[10px] font-medium text-muted-foreground uppercase'>
+            {t('canvas.toolbar.translationTool')}
+          </span>
+          <div className='flex flex-col gap-2'>
+            <div className='flex flex-col gap-1.5'>
+              <div className='flex items-center gap-1.5'>
+                <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                  {t('canvas.toolbar.pageLabel')}:
+                </span>
+                <Button
+                  variant='outline'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || isProcessing}
+                  onClick={handleClearPage}
+                >
+                  {t('common.delete')}
+                </Button>
+                <Button
+                  variant='default'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || !llmReady || isProcessing}
+                  onClick={handleRetranslatePage}
+                >
+                  {t('canvas.toolbar.retranslate')}
+                </Button>
+              </div>
+              <div className='ml-[56px] grid grid-cols-2 gap-1.5'>
+                <Button
+                  data-testid='translation-tool-copy-page'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportPageText}
+                  onClick={() => void handleCopyTranslatedText('page')}
+                >
+                  <CopyIcon className='size-3' />
+                  {t('canvas.toolbar.copyText')}
+                </Button>
+                <Button
+                  data-testid='translation-tool-save-page'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportPageText}
+                  onClick={() => void handleSaveTranslatedText('page')}
+                >
+                  <SaveIcon className='size-3' />
+                  {t('canvas.toolbar.saveText')}
+                </Button>
+              </div>
+            </div>
+            <Separator />
+            <div className='flex flex-col gap-1.5'>
+              <div className='flex items-center gap-1.5'>
+                <span className='min-w-[50px] shrink-0 text-[10px] font-medium text-muted-foreground'>
+                  {t('canvas.toolbar.chapterLabel')}:
+                </span>
+                <Button
+                  variant='outline'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || isProcessing}
+                  onClick={handleClearChapter}
+                >
+                  {t('common.delete')}
+                </Button>
+                <Button
+                  variant='default'
+                  size='xs'
+                  className='h-6 flex-1 px-1 text-[10px]'
+                  disabled={!pageId || !llmReady || isProcessing}
+                  onClick={handleRetranslateChapter}
+                >
+                  {t('canvas.toolbar.retranslate')}
+                </Button>
+              </div>
+              <div className='ml-[56px] grid grid-cols-2 gap-1.5'>
+                <Button
+                  data-testid='translation-tool-copy-chapter'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportChapterText}
+                  onClick={() => void handleCopyTranslatedText('chapter')}
+                >
+                  <CopyIcon className='size-3' />
+                  {t('canvas.toolbar.copyText')}
+                </Button>
+                <Button
+                  data-testid='translation-tool-save-chapter'
+                  variant='outline'
+                  size='xs'
+                  className='h-6 px-1 text-[10px]'
+                  disabled={!canExportChapterText}
+                  onClick={() => void handleSaveTranslatedText('chapter')}
+                >
+                  <SaveIcon className='size-3' />
+                  {t('canvas.toolbar.saveText')}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </PopoverContent>

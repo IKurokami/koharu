@@ -6,7 +6,12 @@
     "copy": "Copy",
     "copied": "Copied",
     "save": "Save",
-    "saved": "Saved!"
+    "saved": "Saved!",
+    "delete": "Delete",
+    "close": "Close",
+    "retry": "Retry",
+    "create": "Create",
+    "error": "Error"
   },
   "menu": {
     "file": "File",
@@ -28,6 +33,8 @@
     "exportPsd": "Export PSD...",
     "exportAllInpainted": "Export All Inpainted...",
     "exportAllRendered": "Export All Rendered...",
+    "exportPsdSub": "Export PSD",
+    "exportAllImages": "Export All Images",
     "view": "View",
     "fitWindow": "Fit Window",
     "originalSize": "Original Size",
@@ -37,6 +44,7 @@
     "processAll": "Process all images",
     "help": "Help",
     "settings": "Settings",
+    "syncHaruNeko": "Sync HaruNeko Scripts...",
     "discord": "Discord",
     "github": "GitHub",
     "version": "Version: {{version}}",
@@ -52,7 +60,8 @@
       "tr-TR": "Türkçe",
       "ko-KR": "한국어",
       "pt-BR": "Português brasileiro"
-    }
+    },
+    "exportAllPsd": "Export all PSDs..."
   },
   "welcome": {
     "title": "Koharu",
@@ -60,12 +69,38 @@
     "new": "New project",
     "newDescription": "Start blank, import pages later",
     "importKhr": "Import .khr archive",
+    "importFolder": "Import Folder",
     "projects": "Recent",
+    "allProjects": "All Projects",
+    "manualProjects": "Manually Created",
+    "importedProjects": "Imported Folder",
+    "downloadedProjects": "Downloaded",
     "emptyHint": "Your recent projects will appear here",
     "newDialogTitle": "New project",
     "newDialogDescription": "Give your project a name. It will be stored under the managed projects directory.",
     "newDialogPlaceholder": "Project name",
-    "newDialogSubmit": "Create"
+    "newDialogSubmit": "Create",
+    "searchProjects": "Search projects...",
+    "downloadFromWeb": "Download from Web",
+    "noMatchingProjects": "No matching projects found",
+    "deleteProjectTitle": "Delete Project",
+    "deleteProjectConfirm": "Are you sure you want to delete this project? All scene, layer, image, and translation data will be permanently deleted. This action cannot be undone.",
+    "deleteProjectForever": "Delete permanently",
+    "newProjectSubtitle": "Create a new project or import files to begin",
+    "openProject": "Open Project",
+    "deleteProject": "Delete Project",
+    "renameProject": "Rename Project",
+    "renameProjectDescription": "Enter a new name for this project.",
+    "openFolder": "Open Folder",
+    "emptyTitle": "Welcome to Koharu",
+    "emptyDescription": "Create a new project to start from scratch.\nOpen an existing project from disk or download from web.",
+    "renameFailed": "Rename failed: {{message}}",
+    "time": {
+      "justNow": "just now",
+      "minutes": "{{count}}m ago",
+      "hours": "{{count}}h ago",
+      "days": "{{count}}d ago"
+    }
   },
   "operations": {
     "title": "Working",
@@ -90,10 +125,31 @@
     "pages_other": "{{count}} pages",
     "empty": "No documents",
     "prompt": "Select or import a page to begin",
+    "selectChapter": "Select Chapter",
+    "allChapters": "All Chapters",
+    "defaultChapterName": "Chapter {{number}}",
+    "createChapter": "Create New Chapter",
+    "createChapterDescription": "Create a new chapter to group and isolate your manga pages.",
+    "createChapterPlaceholder": "e.g. Chapter 1: The Adventure Begins",
+    "downloadChapter": "Download Chapter from Web",
+    "deleteSelectedChapter": "Delete Selected Chapter",
+    "pageLabel": "Page {{number}}",
+    "deletePage": "Delete Page",
+    "insertPageBefore": "Insert Page Before",
+    "insertPageAfter": "Insert Page After",
+    "openPage": "Open Page",
     "pageManager": {
       "title": "Page Manager",
       "description": "Drag and drop pages to reorder them."
-    }
+    },
+    "invalidChapterId": "Error: Invalid chapterId: {{chapterId}}",
+    "targetChapterNotFound": "Error: targetChapter not found for chapterId: {{chapterId}}. Available keys: {{keys}}",
+    "prevIndexNotFound": "Error: Chapter position (prevIndex) not found for chapterId: {{chapterId}}",
+    "deleteChapterTitle": "Delete Chapter",
+    "deleteChapterConfirm": "Are you sure you want to delete this chapter? All pages in this chapter will also be permanently deleted. This action cannot be directly undone, but you can Undo (Ctrl+Z) to restore.",
+    "deleteChapterOp": "Delete Chapter {{name}}",
+    "deleteChapterRequestError": "Error sending delete chapter request to server: {{message}}",
+    "deleteForever": "Delete Permanently"
   },
   "panels": {
     "processing": "Processing",
@@ -109,7 +165,8 @@
     "brush": "Brush Layer",
     "inpainted": "Inpainted",
     "mask": "Segmentation Mask",
-    "base": "Original Image"
+    "base": "Original Image",
+    "rawBadge": "RAW"
   },
   "processing": {
     "detect": "Detect",
@@ -228,6 +285,12 @@
     "fontPlaceholder": "Select font",
     "fontColorLabel": "Font color",
     "fontSizeLabel": "Size",
+    "autoPlaceholder": "auto",
+    "multiBlockStyleUpdate": "Multi-block style update",
+    "bulkStyleUpdate": "Bulk style update",
+    "explicitFontColorUpdate": "Explicit font color update",
+    "googleFontSource": "Google",
+    "systemFontSource": "System",
     "fontStylePlaceholder": "Style",
     "fontScopeGlobal": "Global",
     "fontScopeBlock": "Per block",
@@ -263,7 +326,9 @@
     "readingOrder": "Reading Order",
     "readingOrderRtl": "Right-to-Left (RTL)",
     "readingOrderLtr": "Left-to-Right (LTR)",
-    "readingOrderCustom": "Custom"
+    "readingOrderCustom": "Custom",
+    "clearText": "Clear text",
+    "generateBlock": "Generate block"
   },
   "workspace": {
     "importPrompt": "Import a page to begin editing.",
@@ -277,6 +342,7 @@
     "brush": "Brush",
     "eraser": "Eraser",
     "brushSize": "Brush size",
+    "brushSizeValue": "Brush size value",
     "brushColor": "Brush color"
   },
   "toolRail": {
@@ -292,6 +358,11 @@
   "errors": {
     "title": "Error",
     "dismiss": "Dismiss",
+    "unexpected": "Unexpected error",
+    "somethingWentWrong": "Something went wrong.",
+    "resetSelection": "Reset Selection",
+    "resetQueryCache": "Reset Query Cache",
+    "noCurrentPageSelected": "No current page selected",
     "providerQuotaExceeded": "{{provider}} API quota exceeded. Check your billing or wait for your quota to reset.",
     "providerApiKeyRequired": "{{provider}} API key is required.",
     "providerBaseUrlRequired": "{{provider}} Base URL is required.",
@@ -410,6 +481,12 @@
     "restartApply": "Apply & Restart",
     "restartApplying": "Applying...",
     "restartRequiredDescription": "These settings are loaded at startup. Applying them will save the config and restart the app.",
+    "storageRequired": "Required",
+    "invalidHttpConnectTimeout": "Invalid HTTP connect timeout",
+    "invalidHttpReadTimeout": "Invalid HTTP read timeout",
+    "invalidHttpMaxRetries": "Invalid HTTP max retries",
+    "storageSaveFailed": "Failed",
+    "restartManually": "Restart manually",
     "engines": "Engines",
     "enginesDescription": "Select which ML engine to use for each pipeline stage.",
     "detector": "Detector",
@@ -425,6 +502,7 @@
     "shortcutIncreaseBrushSize": "Increase Brush Size",
     "shortcutDecreaseBrushSize": "Decrease Brush Size",
     "shortcutPressKey": "Press a key...",
+    "shortcutNone": "NONE",
     "shortcutReset": "Reset Keybinds",
     "shortcutResetDescription": "This will restore all shortcuts to their default values. Your saved changes will be lost.",
     "shortcutConflict": "Key combination already in use",
@@ -448,5 +526,122 @@
     },
     "close": "Close",
     "retry": "Retry"
+  },
+  "haruneko": {
+    "syncTitle": "Sync HaruNeko Scripts",
+    "syncDescription": "Download and install all website connector scrapers from HaruNeko into the Koharu system directory.",
+    "syncFailed": "Sync failed.",
+    "syncConnectionError": "Connection error with backend or sync process failed.",
+    "autoSyncTitle": "Automatic Source Sync",
+    "autoSyncDescription": "Koharu will automatically download the HaruNeko connector archive and any required portable tools into the application data folder.",
+    "startSync": "Start Sync & Install",
+    "syncing": "Downloading and syncing scripts...",
+    "syncingDescription": "Please maintain a stable internet connection. Koharu is downloading connector files and preparing the local runner.",
+    "syncComplete": "Sync complete!",
+    "syncSuccessMessage": "Successfully installed {{count}} scripts into the Koharu system.",
+    "searchScrapers": "Search supported websites...",
+    "noScrapersFound": "No files found matching the keyword."
+  },
+  "downloadChapter": {
+    "newChapter": "New Chapter",
+    "downloadFailed": "Failed to download chapter. Please try again.",
+    "downloadFromLinkFailed": "Failed to download chapter from link. Please try again.",
+    "batchFailed": "Failed to download chapters.",
+    "batchPartialError": "Downloaded {{success}} chapter(s). {{failed}} chapter(s) failed.",
+    "title": "Download Chapter from Web",
+    "mangaLabel": "Manga",
+    "selectAllUndownloaded": "Select all undownloaded ({{count}})",
+    "unselectAll": "Unselect all",
+    "batchDownloading": "Downloading chapters...",
+    "selectedChapters": "Selected {{count}} chapter(s)",
+    "downloadSelected": "Download selected chapters ({{count}})",
+    "pasteLinkLabel": "Paste chapter link to download quickly",
+    "pasteLinkPlaceholder": "Paste chapter link (e.g., https://nettruyen...)",
+    "paste": "Paste",
+    "loading": "Loading...",
+    "download": "Download",
+    "fetchingOnlineChapters": "Fetching online chapters...",
+    "downloaded": "Downloaded",
+    "downloading": "Downloading...",
+    "downloadBtn": "Download",
+    "noSourceLinkedTitle": "Project has no linked source",
+    "noSourceLinkedDesc": "This project was created manually and cannot fetch chapters automatically. Please paste a chapter link above to download directly!",
+    "noChaptersFoundTitle": "No chapters found",
+    "noChaptersFoundDesc": "This source has no chapters available or the selected language is not available. You can still paste a chapter link above to download directly!"
+  },
+  "downloadSource": {
+    "createProjectFailed": "Failed to create project from this manga.",
+    "selectSource": "Select download source",
+    "searchOn": "Search on {{source}}",
+    "selectSourceDesc": "Select one of the supported online sources to search and create a project.",
+    "searchOnDesc": "Enter manga name to search on {{source}}.",
+    "loadingSources": "Loading download sources...",
+    "searchPlaceholder": "Search sources or paste manga link here...",
+    "pasteLink": "Paste link",
+    "noSourcesFoundTitle": "No download sources found",
+    "noSourcesFoundDesc": "Try another keyword or ensure you have synced HaruNeko scripts.",
+    "searchMangaPlaceholder": "Enter manga name or paste manga link to search...",
+    "paste": "Paste",
+    "projectPath": "Project destination path",
+    "defaultPath": "Default (Koharu's project directory)",
+    "change": "Change...",
+    "mangaSearchHint": "Enter keywords to start searching online manga from {{source}}.",
+    "searching": "Searching...",
+    "idLabel": "ID",
+    "noDescription": "No description.",
+    "creating": "Creating...",
+    "createProject": "Create Project",
+    "noResultsTitle": "No results found",
+    "noResultsDesc": "Please try again with a different keyword or check your network connection."
+  },
+  "canvas": {
+    "toolbar": {
+      "translationTool": "Translation Tool",
+      "retranslate": "Retranslate",
+      "pageLabel": "Page",
+      "chapterLabel": "Chapter",
+      "copyText": "Copy",
+      "saveText": "Save TXT",
+      "noTranslatedText": "No translated text to export.",
+      "copyTranslatedTextFailed": "Failed to copy translated text.",
+      "saveTranslatedTextFailed": "Failed to save translated text.",
+      "clearPageTranslationOp": "Clear page translation",
+      "clearChapterTranslationOp": "Clear chapter translation"
+    },
+    "showRenderedImage": "Rendered Image",
+    "showInpaintedImage": "Original Image"
+  },
+  "webtoon": {
+    "preview": "Webtoon Preview",
+    "projectFallback": "Project",
+    "noPages": "No pages found in this chapter",
+    "loadingPage": "Loading page {{number}}...",
+    "failedLoadPage": "Failed to load page {{number}}"
+  },
+  "files": {
+    "images": "Images",
+    "koharuArchive": "Koharu archive"
+  },
+  "colorPicker": {
+    "hexColorCode": "Hex color code",
+    "pick": "Pick"
+  },
+  "fontSelect": {
+    "searchPlaceholder": "Search fonts...",
+    "noFontsFound": "No fonts found",
+    "categories": {
+      "favorites": "Favorites",
+      "all": "All",
+      "handwriting": "Hand",
+      "display": "Display",
+      "sansSerif": "Sans",
+      "serif": "Serif",
+      "monospace": "Mono"
+    }
+  },
+  "llmModelSelect": {
+    "selectPlaceholder": "Select a model...",
+    "searchPlaceholder": "Search models...",
+    "noModelsFound": "No models found"
   }
 }

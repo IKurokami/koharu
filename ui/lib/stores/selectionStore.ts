@@ -9,8 +9,10 @@ import { create } from 'zustand'
 type SelectionState = {
   pageId: string | null
   nodeIds: Set<string>
+  chapterId: string | null
 
   setPage: (id: string | null) => void
+  setChapter: (id: string | null) => void
   select: (id: string, additive?: boolean) => void
   selectMany: (ids: string[]) => void
   deselect: (id: string) => void
@@ -21,11 +23,19 @@ type SelectionState = {
 export const useSelectionStore = create<SelectionState>((set, get) => ({
   pageId: null,
   nodeIds: new Set(),
+  chapterId: null,
 
   setPage: (id) =>
     set(() => ({
       pageId: id,
       // Clear selection when the page changes — node ids are page-scoped.
+      nodeIds: new Set(),
+    })),
+
+  setChapter: (id) =>
+    set(() => ({
+      chapterId: id,
+      pageId: null,
       nodeIds: new Set(),
     })),
 

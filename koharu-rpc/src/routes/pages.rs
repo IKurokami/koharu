@@ -17,8 +17,8 @@ use axum::extract::{Multipart, Path, Query, State};
 use image::GenericImageView;
 use koharu_app::pipeline::{self, EngineCtx, PipelineRunOptions};
 use koharu_core::{
-    BlobRef, ImageData, ImageRole, MaskRole, Node, NodeDataPatch, NodeId, NodeKind, Op, Page,
-    PageId, ReadingOrder, Region, Scene, Transform,
+    BlobRef, ChapterId, ImageData, ImageRole, MaskRole, Node, NodeDataPatch, NodeId, NodeKind, Op,
+    Page, PageId, ReadingOrder, Region, Scene, Transform,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,8 @@ async fn create_pages(
     // Collect (filename, bytes) pairs first so we can sort naturally.
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut replace = false;
+    let mut chapter_id = None;
+    let mut at_index = None;
     while let Some(field) = multipart
         .next_field()
         .await
@@ -87,6 +89,28 @@ async fn create_pages(
                 .await
                 .map_err(|e| ApiError::bad_request(format!("{e}")))?;
             replace = text == "true" || text == "1";
+            continue;
+        }
+        if name == "chapterId" || name == "chapter_id" {
+            let text = field
+                .text()
+                .await
+                .map_err(|e| ApiError::bad_request(format!("{e}")))?;
+            if !text.is_empty() && text != "all-chapters" {
+                if let Ok(uid) = uuid::Uuid::parse_str(&text) {
+                    chapter_id = Some(ChapterId(uid));
+                }
+            }
+            continue;
+        }
+        if name == "at" {
+            let text = field
+                .text()
+                .await
+                .map_err(|e| ApiError::bad_request(format!("{e}")))?;
+            if let Ok(val) = text.parse::<usize>() {
+                at_index = Some(val);
+            }
             continue;
         }
         let filename = field
@@ -105,16 +129,36 @@ async fn create_pages(
     // Optionally clear the project first. Emitted as a batch so it's one undo step.
     let starting_index = if replace {
         let scene = session.scene.read();
-        let remove_ops: Vec<Op> = scene
+        let mut remove_ops: Vec<Op> = scene
             .pages
-            .keys()
-            .copied()
-            .map(|id| Op::RemovePage {
+            .iter()
+            .filter(|(_, p)| {
+                if let Some(cid) = chapter_id {
+                    p.chapter_id == Some(cid)
+                } else {
+                    true
+                }
+            })
+            .map(|(&id, p)| Op::RemovePage {
                 id,
-                prev_page: scene.pages[&id].clone(),
+                prev_page: p.clone(),
                 prev_index: scene.pages.get_index_of(&id).unwrap_or(0),
             })
             .collect();
+
+        // Reverse the remove operations to delete in descending order and avoid index shifting
+        remove_ops.reverse();
+
+        let mut index = None;
+        if chapter_id.is_some() {
+            for (&id, p) in scene.pages.iter() {
+                if p.chapter_id == chapter_id {
+                    index = Some(scene.pages.get_index_of(&id).unwrap_or(0));
+                    break;
+                }
+            }
+        }
+
         drop(scene);
         if !remove_ops.is_empty() {
             app.apply(Op::Batch {
@@ -123,9 +167,11 @@ async fn create_pages(
             })
             .map_err(ApiError::internal)?;
         }
-        0
+
+        let total_pages = session.scene.read().pages.len();
+        index.unwrap_or(total_pages)
     } else {
-        session.scene.read().pages.len()
+        at_index.unwrap_or_else(|| session.scene.read().pages.len())
     };
 
     // Decode + hash + write each file in parallel. Image decode is the
@@ -162,6 +208,7 @@ async fn create_pages(
     let mut created_ids = Vec::with_capacity(decoded.len());
     for (i, (filename, w, h, blob)) in decoded.into_iter().enumerate() {
         let mut page = Page::new(&filename, w, h);
+        page.chapter_id = chapter_id;
         let page_id = page.id;
         let source_node_id = NodeId::new();
         page.nodes.insert(
@@ -207,6 +254,10 @@ pub struct CreatePagesFromPathsRequest {
     pub paths: Vec<String>,
     #[serde(default)]
     pub replace: bool,
+    #[serde(default)]
+    pub chapter_id: Option<ChapterId>,
+    #[serde(default)]
+    pub at: Option<usize>,
 }
 
 /// Create pages by reading image files from absolute paths on the server's
@@ -245,16 +296,36 @@ async fn create_pages_from_paths(
 
     let starting_index = if req.replace {
         let scene = session.scene.read();
-        let remove_ops: Vec<Op> = scene
+        let mut remove_ops: Vec<Op> = scene
             .pages
-            .keys()
-            .copied()
-            .map(|id| Op::RemovePage {
+            .iter()
+            .filter(|(_, p)| {
+                if let Some(cid) = req.chapter_id {
+                    p.chapter_id == Some(cid)
+                } else {
+                    true
+                }
+            })
+            .map(|(&id, p)| Op::RemovePage {
                 id,
-                prev_page: scene.pages[&id].clone(),
+                prev_page: p.clone(),
                 prev_index: scene.pages.get_index_of(&id).unwrap_or(0),
             })
             .collect();
+
+        // Reverse the remove operations to delete in descending order and avoid index shifting
+        remove_ops.reverse();
+
+        let mut index = None;
+        if req.chapter_id.is_some() {
+            for (&id, p) in scene.pages.iter() {
+                if p.chapter_id == req.chapter_id {
+                    index = Some(scene.pages.get_index_of(&id).unwrap_or(0));
+                    break;
+                }
+            }
+        }
+
         drop(scene);
         if !remove_ops.is_empty() {
             app.apply(Op::Batch {
@@ -263,9 +334,11 @@ async fn create_pages_from_paths(
             })
             .map_err(ApiError::internal)?;
         }
-        0
+
+        let total_pages = session.scene.read().pages.len();
+        index.unwrap_or(total_pages)
     } else {
-        session.scene.read().pages.len()
+        req.at.unwrap_or_else(|| session.scene.read().pages.len())
     };
 
     let blobs = session.blobs.clone();
@@ -295,6 +368,7 @@ async fn create_pages_from_paths(
     let mut created_ids = Vec::with_capacity(decoded.len());
     for (i, (filename, w, h, blob)) in decoded.into_iter().enumerate() {
         let mut page = Page::new(&filename, w, h);
+        page.chapter_id = req.chapter_id;
         let page_id = page.id;
         let source_node_id = NodeId::new();
         page.nodes.insert(

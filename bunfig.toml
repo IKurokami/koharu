@@ -1,0 +1,6 @@
+[loader]
+".webp" = "file"
+".png" = "file"
+".jpg" = "file"
+".jpeg" = "file"
+".gif" = "file"

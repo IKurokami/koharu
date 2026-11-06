@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -54,6 +54,8 @@ describe('ActivityBubble', () => {
     renderWithQuery(<ActivityBubble />)
     await userEvent.click(screen.getByTestId('operation-cancel'))
     expect(deletes).toEqual(['job-1'])
+    await waitFor(() => expect(screen.queryByTestId('operation-card')).not.toBeInTheDocument())
+    expect(useJobsStore.getState().jobs['job-1'].status).toBe('cancelled')
   })
 
   it('renders a download card for active downloads', () => {

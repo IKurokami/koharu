@@ -10,18 +10,16 @@ import type { Page } from '@/lib/api/schemas'
 type BlockContextMenuOptions = {
   page: Page | null
   pointerToDocument: PointerToDocumentFn
-  onSelect: (nodeId: string | null) => void
   onRemove: (nodeId: string) => void
 }
 
 /**
- * Right-click on a text node pops the context menu. `onSelect(null)` / clear
- * on empty-space right-click. `onRemove(id)` triggered by menu's delete item.
+ * Right-click on a text node pops the context menu. Selection is left untouched
+ * so opening a context menu does not unexpectedly change the current target.
  */
 export function useBlockContextMenu({
   page,
   pointerToDocument,
-  onSelect,
   onRemove,
 }: BlockContextMenuOptions) {
   const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(null)
@@ -32,7 +30,6 @@ export function useBlockContextMenu({
     if (!point) {
       event.preventDefault()
       setContextMenuNodeId(null)
-      onSelect(null)
       return
     }
     const hitId = Object.entries(page.nodes).find(([, n]) => {
@@ -44,12 +41,10 @@ export function useBlockContextMenu({
       )
     })?.[0]
     if (hitId) {
-      onSelect(hitId)
       setContextMenuNodeId(hitId)
     } else {
       event.preventDefault()
       setContextMenuNodeId(null)
-      onSelect(null)
     }
   }
 

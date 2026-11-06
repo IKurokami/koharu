@@ -8,6 +8,7 @@ pub mod downloads;
 pub mod fonts;
 pub mod history;
 pub mod llm;
+pub mod manga;
 pub mod meta;
 pub mod operations;
 pub mod pages;

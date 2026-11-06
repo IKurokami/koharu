@@ -319,18 +319,18 @@ export function RenderControlsPanel() {
 
   const applyStyleToSelected = (updates: Partial<TextStyle>): boolean => {
     if (selectedNodes.length === 0) return false
-    applyStyleToNodes(selectedNodes, updates, 'Multi-block style update')
+    applyStyleToNodes(selectedNodes, updates, t('render.multiBlockStyleUpdate'))
     return true
   }
 
   const applyStyleToAll = (updates: Partial<TextStyle>) => {
-    applyStyleToNodes(textNodes, updates, 'Bulk style update')
+    applyStyleToNodes(textNodes, updates, t('render.bulkStyleUpdate'))
   }
 
   const commitCurrentFontColorIfImplicit = () => {
     const targets = selectedNodes.length > 0 ? selectedNodes : textNodes
     if (targets.every(hasExplicitColor)) return
-    applyStyleToNodes(targets, { color: currentColor }, 'Explicit font color update')
+    applyStyleToNodes(targets, { color: currentColor }, t('render.explicitFontColorUpdate'))
   }
 
   const applyStrokeSetting = (nextStroke: TextStrokeStyle) => {
@@ -508,7 +508,11 @@ export function RenderControlsPanel() {
                       variant={variant}
                       label={
                         isDuplicate
-                          ? `${label} (${variant.source === 'google' ? 'Google' : 'System'})`
+                          ? `${label} (${
+                              variant.source === 'google'
+                                ? t('render.googleFontSource')
+                                : t('render.systemFontSource')
+                            })`
                           : label
                       }
                     />
@@ -574,7 +578,7 @@ export function RenderControlsPanel() {
             data-testid='render-font-size'
             disabled={!selectedNode}
             value={currentFontSize !== undefined ? Math.round(currentFontSize) : ''}
-            placeholder='auto'
+            placeholder={t('render.autoPlaceholder')}
             onChange={(event) => {
               const parsed = Number.parseInt(event.target.value, 10)
               if (!Number.isFinite(parsed) || parsed < 1) return

@@ -1,11 +1,34 @@
 'use client'
 
-import { CopyIcon, MinusIcon, SquareIcon, XIcon } from 'lucide-react'
-import Image from 'next/image'
+import {
+  CopyIcon,
+  MinusIcon,
+  SquareIcon,
+  XIcon,
+  BookOpenIcon,
+  FileTextIcon,
+  FolderOpenIcon,
+  SaveIcon,
+  DownloadIcon,
+  XCircleIcon,
+  SettingsIcon,
+  CloudLightningIcon,
+  UndoIcon,
+  RedoIcon,
+  CheckSquareIcon,
+  Maximize2Icon,
+  MinimizeIcon,
+  PlayIcon,
+  RefreshCwIcon,
+  FlameIcon,
+  ExternalLinkIcon,
+  InfoIcon,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { fitCanvasToViewport, resetCanvasScale } from '@/components/Canvas'
+import { CloneHaruNekoDialog } from '@/components/CloneHaruNekoDialog'
 import { SettingsDialog, type TabId } from '@/components/SettingsDialog'
 import {
   Menubar,
@@ -15,6 +38,9 @@ import {
   MenubarSeparator,
   MenubarShortcut,
   MenubarTrigger,
+  MenubarSub,
+  MenubarSubTrigger,
+  MenubarSubContent,
 } from '@/components/ui/menubar'
 import { useScene } from '@/hooks/useScene'
 import { getConfig, startPipeline } from '@/lib/api/default/default'
@@ -50,6 +76,7 @@ type MenuItem = {
   onSelect?: () => void | Promise<void>
   disabled?: boolean
   testId?: string
+  icon?: React.ReactNode
 }
 
 type MenuSection = {
@@ -62,14 +89,16 @@ export function MenuBar() {
   const { t } = useTranslation()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<TabId>('appearance')
+  const [cloneHaruNekoOpen, setCloneHaruNekoOpen] = useState(false)
   const hasPage = useSelectionStore((s) => s.pageId !== null)
-  const hasScene = useScene().scene !== null
+  const { scene } = useScene()
+  const hasScene = scene !== null
   const shortcuts = usePreferencesStore((state) => state.shortcuts)
   const isMac = useMemo(() => getPlatform() === 'mac', [])
 
   const requirePageId = () => {
     const id = useSelectionStore.getState().pageId
-    if (!id) throw new Error('No current page selected')
+    if (!id) throw new Error(t('errors.noCurrentPageSelected'))
     return id
   }
 
@@ -89,9 +118,23 @@ export function MenuBar() {
     ].filter((s): s is string => !!s)
     const editor = useEditorUiStore.getState()
     const prefs = usePreferencesStore.getState()
+
+    let pages: string[] | undefined = undefined
+    if (opts.pageId) {
+      pages = [opts.pageId]
+    } else {
+      const chapterId = useSelectionStore.getState().chapterId
+      if (chapterId && chapterId !== 'all-chapters' && scene?.chapters) {
+        const chapter = scene.chapters[chapterId]
+        if (chapter && chapter.pageIds) {
+          pages = chapter.pageIds
+        }
+      }
+    }
+
     await startPipeline({
       steps,
-      pages: opts.pageId ? [opts.pageId] : undefined,
+      pages,
       targetLanguage: editor.selectedLanguage,
       systemPrompt: prefs.customSystemPrompt,
       defaultFont: prefs.defaultFont,
@@ -102,7 +145,10 @@ export function MenuBar() {
   const runInpaint = async (pageId: string) => {
     const cfg = await getConfig()
     if (!cfg.pipeline?.inpainter) return
-    await startPipeline({ steps: [cfg.pipeline.inpainter], pages: [pageId] })
+    const steps = [cfg.pipeline.bubble_segmenter, cfg.pipeline.inpainter].filter(
+      (step): step is string => !!step,
+    )
+    await startPipeline({ steps, pages: [pageId] })
   }
 
   const exportItems: MenuItem[] = [
@@ -111,24 +157,35 @@ export function MenuBar() {
       onSelect: () => void exportCurrentProjectAs('rendered', [requirePageId()]),
       disabled: !hasPage,
       testId: 'menu-file-export',
+      icon: <DownloadIcon className='mr-2 h-3.5 w-3.5 text-foreground opacity-70' />,
     },
     {
       label: t('menu.exportPsd'),
       onSelect: () => void exportCurrentProjectAs('psd', [requirePageId()]),
       disabled: !hasPage,
       testId: 'menu-file-export-psd',
+      icon: <DownloadIcon className='mr-2 h-3.5 w-3.5 text-blue-500 opacity-70' />,
+    },
+    {
+      label: t('menu.exportAllPsd'),
+      onSelect: () => void exportCurrentProjectAs('psd'),
+      disabled: !hasScene,
+      testId: 'menu-file-export-all-psd',
+      icon: <DownloadIcon className='mr-2 h-3.5 w-3.5 text-blue-400 opacity-70' />,
     },
     {
       label: t('menu.exportAllInpainted'),
       onSelect: () => void exportCurrentProjectAs('inpainted'),
       disabled: !hasScene,
       testId: 'menu-file-export-all-inpainted',
+      icon: <DownloadIcon className='mr-2 h-3.5 w-3.5 text-green-500 opacity-70' />,
     },
     {
       label: t('menu.exportAllRendered'),
       onSelect: () => void exportCurrentProjectAs('rendered'),
       disabled: !hasScene,
       testId: 'menu-file-export-all-rendered',
+      icon: <DownloadIcon className='mr-2 h-3.5 w-3.5 text-purple-500 opacity-70' />,
     },
   ]
 
@@ -136,8 +193,16 @@ export function MenuBar() {
     {
       label: t('menu.view'),
       items: [
-        { label: t('menu.fitWindow'), onSelect: fitCanvasToViewport },
-        { label: t('menu.originalSize'), onSelect: resetCanvasScale },
+        {
+          label: t('menu.fitWindow'),
+          onSelect: fitCanvasToViewport,
+          icon: <Maximize2Icon className='mr-2 h-3.5 w-3.5 opacity-70' />,
+        },
+        {
+          label: t('menu.originalSize'),
+          onSelect: resetCanvasScale,
+          icon: <MinimizeIcon className='mr-2 h-3.5 w-3.5 opacity-70' />,
+        },
       ],
     },
     {
@@ -149,28 +214,36 @@ export function MenuBar() {
           onSelect: () => void runPipeline({ pageId: requirePageId() }),
           disabled: !hasPage,
           testId: 'menu-process-current',
+          icon: <PlayIcon className='mr-2 h-3.5 w-3.5 text-green-500 opacity-70' />,
         },
         {
           label: t('menu.redoInpaintRender'),
           onSelect: () => void runInpaint(requirePageId()),
           disabled: !hasPage,
           testId: 'menu-process-rerender',
+          icon: <RefreshCwIcon className='mr-2 h-3.5 w-3.5 text-blue-500 opacity-70' />,
         },
         {
           label: t('menu.processAll'),
           onSelect: () => void runPipeline({}),
           disabled: !hasScene,
           testId: 'menu-process-all',
+          icon: <FlameIcon className='mr-2 h-3.5 w-3.5 text-red-500 opacity-70' />,
         },
       ],
     },
   ]
 
   const helpMenuItems: MenuItem[] = [
-    { label: t('menu.discord'), onSelect: () => openExternalUrl('https://discord.gg/mHvHkxGnUY') },
+    {
+      label: t('menu.discord'),
+      onSelect: () => openExternalUrl('https://discord.gg/mHvHkxGnUY'),
+      icon: <ExternalLinkIcon className='mr-2 h-3.5 w-3.5 text-indigo-400 opacity-70' />,
+    },
     {
       label: t('menu.github'),
       onSelect: () => openExternalUrl('https://github.com/mayocream/koharu'),
+      icon: <ExternalLinkIcon className='mr-2 h-3.5 w-3.5 text-gray-400 opacity-70' />,
     },
   ]
 
@@ -181,7 +254,12 @@ export function MenuBar() {
     <div className='flex h-8 items-center border-b border-border bg-background text-[13px] text-foreground'>
       {isNativeMacOS && <MacOSControls />}
       <div className='flex h-full items-center pl-2 select-none'>
-        <Image src='/icon.png' alt='Koharu' width={18} height={18} draggable={false} />
+        <img
+          src='/icon.png'
+          alt='Koharu'
+          className='h-[18px] w-[18px] shrink-0 object-contain'
+          draggable={false}
+        />
       </div>
       <Menubar className='h-auto gap-1 border-none bg-transparent p-0 px-1.5 shadow-none'>
         <MenubarMenu>
@@ -194,59 +272,130 @@ export function MenuBar() {
           <MenubarContent className='min-w-48' align='start' sideOffset={5} alignOffset={-3}>
             <MenubarItem
               data-testid='menu-file-open-files'
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               disabled={!hasScene}
               onSelect={() => void importPages('replace', 'files')}
             >
-              {t('menu.openFiles')}
+              <FileTextIcon className='mr-2 h-3.5 w-3.5 opacity-70' />
+              <span>{t('menu.openFiles')}</span>
             </MenubarItem>
             <MenubarItem
               data-testid='menu-file-open-folder'
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               disabled={!hasScene}
               onSelect={() => void importPages('replace', 'folder')}
             >
-              {t('menu.openFolder')}
+              <FolderOpenIcon className='mr-2 h-3.5 w-3.5 text-yellow-500 opacity-70' />
+              <span>{t('menu.openFolder')}</span>
             </MenubarItem>
             <MenubarSeparator />
             <MenubarItem
               data-testid='menu-file-save-as'
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               disabled={!hasScene}
               onSelect={() => void exportCurrentProjectAs('khr')}
             >
-              {t('menu.saveAs')}
+              <SaveIcon className='mr-2 h-3.5 w-3.5 text-blue-500 opacity-70' />
+              <span>{t('menu.saveAs')}</span>
             </MenubarItem>
             <MenubarSeparator />
-            {exportItems.map((item) => (
-              <MenubarItem
-                key={item.label}
-                data-testid={item.testId}
-                className='text-[13px]'
-                disabled={item.disabled}
-                onSelect={item.onSelect ? () => void item.onSelect?.() : undefined}
+            {/* Export Current Page (Rendered Image) */}
+            <MenubarItem
+              data-testid='menu-file-export'
+              className='flex items-center text-[13px]'
+              disabled={!hasPage}
+              onSelect={() => void exportCurrentProjectAs('rendered', [requirePageId()])}
+            >
+              <DownloadIcon className='mr-2 h-3.5 w-3.5 text-foreground opacity-70' />
+              <span>{t('menu.export')}</span>
+            </MenubarItem>
+
+            {/* Export PSD Sub-menu */}
+            <MenubarSub>
+              <MenubarSubTrigger
+                className='flex items-center text-[13px]'
+                disabled={!hasPage && !hasScene}
               >
-                {item.label}
-              </MenubarItem>
-            ))}
+                <DownloadIcon className='mr-2 h-3.5 w-3.5 text-blue-500 opacity-70' />
+                <span>{t('menu.exportPsdSub')}</span>
+              </MenubarSubTrigger>
+              <MenubarSubContent className='min-w-48 rounded-xl border border-border/80 bg-popover p-1 shadow-md'>
+                <MenubarItem
+                  data-testid='menu-file-export-psd'
+                  className='flex items-center text-[13px]'
+                  disabled={!hasPage}
+                  onSelect={() => void exportCurrentProjectAs('psd', [requirePageId()])}
+                >
+                  <DownloadIcon className='mr-2 h-3.5 w-3.5 text-blue-500 opacity-70' />
+                  <span>{t('menu.exportPsd')}</span>
+                </MenubarItem>
+                <MenubarItem
+                  data-testid='menu-file-export-all-psd'
+                  className='flex items-center text-[13px]'
+                  disabled={!hasScene}
+                  onSelect={() => void exportCurrentProjectAs('psd')}
+                >
+                  <DownloadIcon className='mr-2 h-3.5 w-3.5 text-blue-400 opacity-70' />
+                  <span>{t('menu.exportAllPsd')}</span>
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
+
+            {/* Export All Images Sub-menu */}
+            <MenubarSub>
+              <MenubarSubTrigger className='flex items-center text-[13px]' disabled={!hasScene}>
+                <DownloadIcon className='mr-2 h-3.5 w-3.5 text-green-500 opacity-70' />
+                <span>{t('menu.exportAllImages')}</span>
+              </MenubarSubTrigger>
+              <MenubarSubContent className='min-w-48 rounded-xl border border-border/80 bg-popover p-1 shadow-md'>
+                <MenubarItem
+                  data-testid='menu-file-export-all-inpainted'
+                  className='flex items-center text-[13px]'
+                  disabled={!hasScene}
+                  onSelect={() => void exportCurrentProjectAs('inpainted')}
+                >
+                  <DownloadIcon className='mr-2 h-3.5 w-3.5 text-green-500 opacity-70' />
+                  <span>{t('menu.exportAllInpainted')}</span>
+                </MenubarItem>
+                <MenubarItem
+                  data-testid='menu-file-export-all-rendered'
+                  className='flex items-center text-[13px]'
+                  disabled={!hasScene}
+                  onSelect={() => void exportCurrentProjectAs('rendered')}
+                >
+                  <DownloadIcon className='mr-2 h-3.5 w-3.5 text-purple-500 opacity-70' />
+                  <span>{t('menu.exportAllRendered')}</span>
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
             <MenubarSeparator />
             <MenubarItem
               data-testid='menu-file-close-project'
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               disabled={!hasScene}
               onSelect={() => void closeProject()}
             >
-              {t('menu.closeProject')}
+              <XCircleIcon className='mr-2 h-3.5 w-3.5 text-red-500 opacity-70' />
+              <span>{t('menu.closeProject')}</span>
             </MenubarItem>
             <MenubarSeparator />
             <MenubarItem
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               onSelect={() => {
                 setSettingsTab('appearance')
                 setSettingsOpen(true)
               }}
             >
-              {t('menu.settings')}
+              <SettingsIcon className='mr-2 h-3.5 w-3.5 opacity-70' />
+              <span>{t('menu.settings')}</span>
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarItem
+              className='flex items-center text-[13px]'
+              onSelect={() => setCloneHaruNekoOpen(true)}
+            >
+              <CloudLightningIcon className='mr-2 h-3.5 w-3.5 text-purple-400 opacity-70' />
+              <span>{t('menu.syncHaruNeko')}</span>
             </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
@@ -260,30 +409,39 @@ export function MenuBar() {
           <MenubarContent className='min-w-40' align='start' sideOffset={5} alignOffset={-3}>
             <MenubarItem
               data-testid='menu-edit-undo'
-              className='text-[13px]'
+              className='flex items-center justify-between text-[13px]'
               disabled={!hasScene}
               onSelect={() => void undoOp()}
             >
-              {t('menu.undo')}
+              <div className='flex items-center'>
+                <UndoIcon className='mr-2 h-3.5 w-3.5 opacity-70' />
+                <span>{t('menu.undo')}</span>
+              </div>
               <MenubarShortcut>{formatShortcutForDisplay(shortcuts.undo, isMac)}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem
               data-testid='menu-edit-redo'
-              className='text-[13px]'
+              className='flex items-center justify-between text-[13px]'
               disabled={!hasScene}
               onSelect={() => void redoOp()}
             >
-              {t('menu.redo')}
+              <div className='flex items-center'>
+                <RedoIcon className='mr-2 h-3.5 w-3.5 opacity-70' />
+                <span>{t('menu.redo')}</span>
+              </div>
               <MenubarShortcut>{formatShortcutForDisplay(shortcuts.redo, isMac)}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
             <MenubarItem
               data-testid='menu-edit-select-all'
-              className='text-[13px]'
+              className='flex items-center justify-between text-[13px]'
               disabled={!hasPage}
               onSelect={() => selectAllTextNodesOnCurrentPage()}
             >
-              {t('menu.selectAll')}
+              <div className='flex items-center'>
+                <CheckSquareIcon className='mr-2 h-3.5 w-3.5 opacity-70' />
+                <span>{t('menu.selectAll')}</span>
+              </div>
               <MenubarShortcut>{isMac ? '⌘A' : 'Ctrl+A'}</MenubarShortcut>
             </MenubarItem>
           </MenubarContent>
@@ -301,11 +459,12 @@ export function MenuBar() {
                 <MenubarItem
                   key={item.label}
                   data-testid={item.testId}
-                  className='text-[13px]'
+                  className='flex items-center text-[13px]'
                   disabled={item.disabled}
                   onSelect={item.onSelect ? () => void item.onSelect?.() : undefined}
                 >
-                  {item.label}
+                  {item.icon}
+                  <span>{item.label}</span>
                 </MenubarItem>
               ))}
             </MenubarContent>
@@ -319,29 +478,42 @@ export function MenuBar() {
             {helpMenuItems.map((item) => (
               <MenubarItem
                 key={item.label}
-                className='text-[13px]'
+                className='flex items-center text-[13px]'
                 disabled={item.disabled}
                 onSelect={item.onSelect ? () => void item.onSelect?.() : undefined}
               >
-                {item.label}
+                {item.icon}
+                <span>{item.label}</span>
               </MenubarItem>
             ))}
             <MenubarSeparator />
             <MenubarItem
-              className='text-[13px]'
+              className='flex items-center text-[13px]'
               onSelect={() => {
                 setSettingsTab('about')
                 setSettingsOpen(true)
               }}
             >
-              {t('settings.about')}
+              <InfoIcon className='mr-2 h-3.5 w-3.5 text-blue-400 opacity-70' />
+              <span>{t('settings.about')}</span>
             </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
       </Menubar>
-      <div data-tauri-drag-region className='flex h-full flex-1 items-center justify-center' />
+      <div
+        data-tauri-drag-region
+        className='flex h-full flex-1 items-center justify-center gap-1.5 text-[11px] font-semibold text-muted-foreground/60 select-none'
+      >
+        {scene?.project?.name ? (
+          <BookOpenIcon className='h-3.5 w-3.5 text-blue-500 opacity-60' />
+        ) : (
+          <img src='/icon.png' alt='' className='h-3.5 w-3.5 opacity-60' draggable={false} />
+        )}
+        <span>{scene?.project?.name ? `${scene.project.name} - Koharu` : 'Koharu'}</span>
+      </div>
       {isWindowsTauri && <WindowControls />}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} defaultTab={settingsTab} />
+      <CloneHaruNekoDialog open={cloneHaruNekoOpen} onOpenChange={setCloneHaruNekoOpen} />
     </div>
   )
 }

@@ -2,9 +2,9 @@
 //! `/llm/current`: `GET` describes it, `PUT` loads, `DELETE` unloads.
 //!
 //! - `GET    /llm/current`   — current state (status, target, error)
-//! - `PUT    /llm/current`   — load the given target (local or provider)
+//! - `PUT    /llm/current`   — load the given provider target
 //! - `DELETE /llm/current`   — unload / release the model
-//! - `GET    /llm/catalog`   — available local + provider-backed models
+//! - `GET    /llm/catalog`   — available provider-backed models
 
 use axum::Json;
 use axum::extract::State;

@@ -78,6 +78,10 @@ impl ProjectSession {
             name: name.into(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            sync_dir: None,
+            source_id: None,
+            manga_id: None,
+            manga_title: None,
         };
         std::fs::write(
             dir.join(PROJECT_TOML).as_std_path(),
@@ -201,6 +205,10 @@ fn load_snapshot(dir: &Utf8Path, creating: bool) -> Result<(Scene, u64)> {
             name: String::new(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            sync_dir: None,
+            source_id: None,
+            manga_id: None,
+            manga_title: None,
         }
     } else {
         anyhow::bail!("missing project.toml at {}", toml_path);
@@ -210,6 +218,10 @@ fn load_snapshot(dir: &Utf8Path, creating: bool) -> Result<(Scene, u64)> {
     scene.project.name = meta.name;
     scene.project.created_at = meta.created_at;
     scene.project.updated_at = meta.updated_at;
+    scene.project.sync_dir = meta.sync_dir;
+    scene.project.source_id = meta.source_id;
+    scene.project.manga_id = meta.manga_id;
+    scene.project.manga_title = meta.manga_title;
     Ok((scene, 0))
 }
 
@@ -218,6 +230,14 @@ struct ProjectTomlFile {
     name: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    sync_dir: Option<String>,
+    #[serde(default)]
+    source_id: Option<String>,
+    #[serde(default)]
+    manga_id: Option<String>,
+    #[serde(default)]
+    manga_title: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

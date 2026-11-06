@@ -6,8 +6,8 @@ import { queryClient } from '@/lib/queryClient'
 
 import { server } from './msw/server'
 
-// Boot a Node-side MSW server for every test. Each test may use
-// `server.use(...)` to layer extra handlers on top of the defaults.
+// Boot a Node-side MSW server for every test. Each test must register
+// the API handlers it needs with `server.use(...)`.
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
@@ -25,7 +25,7 @@ beforeEach(() => queryClient.clear())
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
-    i18n: { language: 'en-US', changeLanguage: async () => {} },
+    i18n: { language: 'vi-VN', changeLanguage: async () => {} },
   }),
   Trans: ({ i18nKey, children }: { i18nKey?: string; children?: unknown }) =>
     (i18nKey ?? (children as never)) as never,

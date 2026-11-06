@@ -5,14 +5,15 @@
 //!   endpoint while running jobs are expected; React Query drives the
 //!   cadence on the UI side.
 //! - `DELETE /operations/{id}` — unified cancel. Pipeline cancellation
-//!   flips the cancel flag registered at start time; download cancellation
-//!   is best-effort (HF hub transfers don't expose mid-stream cancel) and
-//!   just evicts the row so the UI clears it.
+//!   flips the cancel flag registered at start time and publishes an immediate
+//!   `JobFinished(cancelled)` so the UI can stop showing progress while any
+//!   non-interruptible model call unwinds. Download cancellation is best-effort
+//!   (HF hub transfers don't expose mid-stream cancel) and just evicts the row.
 
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use koharu_core::JobSummary;
+use koharu_core::{AppEvent, JobFinishedEvent, JobStatus, JobSummary};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -74,6 +75,26 @@ async fn cancel_operation(
 ) -> ApiResult<StatusCode> {
     if let Some(flag) = cancels().get(&id) {
         flag.store(true, Ordering::Relaxed);
+    }
+    if let Some(existing) = app.jobs().get(&id) {
+        let job = existing.value().clone();
+        drop(existing);
+        if job.status == JobStatus::Running {
+            app.jobs().insert(
+                id.clone(),
+                JobSummary {
+                    id: id.clone(),
+                    kind: job.kind,
+                    status: JobStatus::Cancelled,
+                    error: None,
+                },
+            );
+            app.bus.publish(AppEvent::JobFinished(JobFinishedEvent {
+                id: id.clone(),
+                status: JobStatus::Cancelled,
+                error: None,
+            }));
+        }
     }
     // Best-effort download cancel: drop the registry row.
     app.downloads().remove(&id);

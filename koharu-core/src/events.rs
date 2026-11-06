@@ -192,6 +192,10 @@ pub struct ProjectSummary {
     /// UNIX epoch). Used for "recent projects" ordering.
     #[serde(default)]
     pub updated_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]

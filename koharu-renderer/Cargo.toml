@@ -30,7 +30,6 @@ tracing = { workspace = true }
 blake3 = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
 criterion = { workspace = true }
 
 [[bench]]

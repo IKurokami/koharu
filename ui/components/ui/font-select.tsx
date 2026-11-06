@@ -3,6 +3,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { CheckIcon, ChevronDownIcon, StarIcon } from 'lucide-react'
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
@@ -11,6 +12,16 @@ import { cn } from '@/lib/utils'
 
 const ITEM_HEIGHT = 28
 const MAX_VISIBLE = 10
+
+const FONT_CATEGORIES = [
+  { value: 'favs', filter: 'favs', labelKey: 'fontSelect.categories.favorites' },
+  { value: 'all', filter: null, labelKey: 'fontSelect.categories.all' },
+  { value: 'hand', filter: 'handwriting', labelKey: 'fontSelect.categories.handwriting' },
+  { value: 'display', filter: 'display', labelKey: 'fontSelect.categories.display' },
+  { value: 'sans', filter: 'sans-serif', labelKey: 'fontSelect.categories.sansSerif' },
+  { value: 'serif', filter: 'serif', labelKey: 'fontSelect.categories.serif' },
+  { value: 'mono', filter: 'monospace', labelKey: 'fontSelect.categories.monospace' },
+] as const
 
 type FontOption = {
   familyName: string
@@ -172,6 +183,7 @@ export function FontSelect({
   onChange,
   ...props
 }: FontSelectProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
@@ -254,38 +266,31 @@ export function FontSelect({
           ref={inputRef}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder='Search fonts…'
+          placeholder={t('fontSelect.searchPlaceholder')}
           className='w-full border-b bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground'
         />
         <ScrollArea className='border-b'>
           <div className='flex gap-0.5 px-1.5 py-1'>
-            {['favs', 'all', 'hand', 'display', 'sans', 'serif', 'mono'].map((cat, i) => {
-              const full = [
-                'favs',
-                'all',
-                'handwriting',
-                'display',
-                'sans-serif',
-                'serif',
-                'monospace',
-              ][i]
-              const active = cat === 'all' ? !categoryFilter : categoryFilter === full
+            {FONT_CATEGORIES.map((category) => {
+              const active =
+                category.filter === null ? !categoryFilter : categoryFilter === category.filter
               return (
                 <button
-                  key={cat}
+                  key={category.value}
                   type='button'
+                  aria-label={category.value === 'favs' ? t(category.labelKey) : undefined}
                   className={cn(
                     'shrink-0 rounded-full px-1.5 py-px text-[9px]',
                     active
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground hover:bg-accent',
                   )}
-                  onClick={() => setCategoryFilter(cat === 'all' ? null : full)}
+                  onClick={() => setCategoryFilter(category.filter)}
                 >
-                  {cat === 'favs' ? (
+                  {category.value === 'favs' ? (
                     <StarIcon className='size-2.5 fill-current' />
                   ) : (
-                    cat.charAt(0).toUpperCase() + cat.slice(1)
+                    t(category.labelKey)
                   )}
                 </button>
               )
@@ -324,7 +329,9 @@ export function FontSelect({
           </div>
         </ScrollArea>
         {filtered.length === 0 && (
-          <div className='px-2 py-4 text-center text-xs text-muted-foreground'>No fonts found</div>
+          <div className='px-2 py-4 text-center text-xs text-muted-foreground'>
+            {t('fontSelect.noFontsFound')}
+          </div>
         )}
       </PopoverContent>
     </Popover>

@@ -60,7 +60,6 @@ metal = [
 ]
 
 [dev-dependencies]
-dirs = { workspace = true }
 
 [[bin]]
 name = "comic-text-detector"

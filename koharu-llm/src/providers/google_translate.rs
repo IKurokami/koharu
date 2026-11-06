@@ -45,6 +45,13 @@ pub struct GoogleTranslateMtProvider {
     pub api_key: String,
 }
 
+fn google_translate_target_lang(language: Language) -> &'static str {
+    match language {
+        Language::Vietnamese => "vi",
+        _ => language.tag(),
+    }
+}
+
 impl AnyProvider for GoogleTranslateMtProvider {
     fn translate<'a>(
         &'a self,
@@ -56,7 +63,7 @@ impl AnyProvider for GoogleTranslateMtProvider {
         Box::pin(async move {
             let body = GoogleRequest {
                 q: vec![source],
-                target: target_language.tag(),
+                target: google_translate_target_lang(target_language),
                 source: None,
                 format: Some("text"),
             };
@@ -91,5 +98,24 @@ impl AnyProvider for GoogleTranslateMtProvider {
                 .translated_text;
             Ok(out)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::google_translate_target_lang;
+    use crate::Language;
+
+    #[test]
+    fn maps_vietnamese_to_google_language_code() {
+        assert_eq!(google_translate_target_lang(Language::Vietnamese), "vi");
+    }
+
+    #[test]
+    fn keeps_existing_bcp47_tags_for_other_languages() {
+        assert_eq!(
+            google_translate_target_lang(Language::ChineseSimplified),
+            "zh-CN"
+        );
     }
 }

@@ -29,7 +29,6 @@ path = "bin/paddleocr-vl.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-futures = { workspace = true }
 image = { workspace = true }
 koharu-runtime = { workspace = true }
 libloading = { workspace = true }

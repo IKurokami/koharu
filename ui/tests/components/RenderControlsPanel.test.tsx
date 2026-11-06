@@ -71,6 +71,7 @@ describe('RenderControlsPanel Font Assignment', () => {
           { familyName: 'Custom', postScriptName: 'Custom', source: 'system', cached: true },
         ]),
       ),
+      http.get('/api/v1/google-fonts', () => HttpResponse.json({ fonts: [] })),
       http.get('/api/v1/scene.json', () =>
         HttpResponse.json(
           sceneWithTextNodes([
@@ -167,7 +168,7 @@ describe('RenderControlsPanel Font Assignment', () => {
 
     const input = (await screen.findByTestId('render-font-size')) as HTMLInputElement
     await waitFor(() => expect(input.value).toBe(''))
-    expect(input).toHaveAttribute('placeholder', 'auto')
+    expect(input).toHaveAttribute('placeholder', 'render.autoPlaceholder')
   })
 
   it('opening the font color picker commits effective black as an explicit color', async () => {

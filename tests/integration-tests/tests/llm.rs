@@ -16,21 +16,21 @@ async fn unload_when_empty_is_ok() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn load_with_bogus_local_model_errors() -> anyhow::Result<()> {
+async fn load_with_local_model_errors() -> anyhow::Result<()> {
     let app = TestApp::spawn().await?;
     let res = api::put_current_llm(
         &app.client_config,
         models::LlmLoadRequest {
             target: Box::new(models::LlmTarget {
                 kind: models::LlmTargetKind::Local,
-                model_id: "never-gonna-give-you-up".into(),
+                model_id: "hunyuan-mt-7b".into(),
                 provider_id: None,
             }),
             options: None,
         },
     )
     .await;
-    assert!(res.is_err(), "unknown local model id should be rejected");
+    assert!(res.is_err(), "local language models should not be loadable");
     Ok(())
 }
 

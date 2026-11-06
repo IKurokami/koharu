@@ -16,6 +16,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use koharu_core::ProjectSummary;
 
 use crate::AppConfig;
+use serde_json;
 
 pub const PROJECT_EXT: &str = "khrproj";
 
@@ -36,12 +37,7 @@ pub fn project_path(config: &AppConfig, id: &str) -> Result<Utf8PathBuf> {
     Ok(projects_dir(config)?.join(format!("{slug}.{PROJECT_EXT}")))
 }
 
-/// Pick a fresh `{projects_dir}/{slug}.khrproj` path for a new project with
-/// the given display name. Sanitises the name, retries with `-2`, `-3`, … on
-/// collision. Creates the directory atomically so concurrent callers never
-/// land on the same path.
-pub fn allocate_named(config: &AppConfig, name: &str) -> Result<Utf8PathBuf> {
-    let root = projects_dir(config)?;
+pub fn allocate_named_in_dir(parent_dir: &Utf8Path, name: &str) -> Result<Utf8PathBuf> {
     let base = {
         let s = slugify(name);
         if s.is_empty() {
@@ -56,7 +52,7 @@ pub fn allocate_named(config: &AppConfig, name: &str) -> Result<Utf8PathBuf> {
         } else {
             format!("{base}-{attempt}.{PROJECT_EXT}")
         };
-        let candidate = root.join(&filename);
+        let candidate = parent_dir.join(&filename);
         match fs::create_dir(candidate.as_std_path()) {
             Ok(()) => return Ok(candidate),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -64,6 +60,15 @@ pub fn allocate_named(config: &AppConfig, name: &str) -> Result<Utf8PathBuf> {
         }
     }
     anyhow::bail!("could not allocate a fresh project directory (1024 collisions)")
+}
+
+/// Pick a fresh `{projects_dir}/{slug}.khrproj` path for a new project with
+/// the given display name. Sanitises the name, retries with `-2`, `-3`, … on
+/// collision. Creates the directory atomically so concurrent callers never
+/// land on the same path.
+pub fn allocate_named(config: &AppConfig, name: &str) -> Result<Utf8PathBuf> {
+    let root = projects_dir(config)?;
+    allocate_named_in_dir(&root, name)
 }
 
 /// Pick a fresh path for an imported archive. Uses the archive-provided name
@@ -100,6 +105,16 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
         };
         let abs = root.join(filename);
         let display = read_project_name(&abs).unwrap_or_else(|| id.to_string());
+        let meta = read_project_meta(&abs);
+        let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty()
+        {
+            "downloaded".to_string()
+        } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+            "imported".to_string()
+        } else {
+            "manual".to_string()
+        };
+        let sync_dir = meta.sync_dir.clone();
         let updated_at_ms = entry
             .metadata()
             .ok()
@@ -112,8 +127,75 @@ pub fn list_projects(config: &AppConfig) -> Result<Vec<ProjectSummary>> {
             name: display,
             path: abs.to_string(),
             updated_at_ms,
+            project_type: Some(project_type),
+            sync_dir,
         });
     }
+
+    // Merge with recent projects!
+    let r_path = recent_projects_path();
+    if r_path.exists() {
+        if let Ok(text) = fs::read_to_string(r_path.as_std_path()) {
+            if let Ok(recent_list) = serde_json::from_str::<Vec<Utf8PathBuf>>(&text) {
+                let mut updated_recents = recent_list.clone();
+                let mut list_changed = false;
+
+                for path in recent_list {
+                    if !path.exists() {
+                        // Cleanup deleted projects from recent registry
+                        updated_recents.retain(|p| p != &path);
+                        list_changed = true;
+                        continue;
+                    }
+
+                    // If already included via default projects dir scanning, skip duplicate
+                    if out.iter().any(|p| p.path == path.as_str()) {
+                        continue;
+                    }
+
+                    let Some(id) = id_from_dir(&path) else {
+                        continue;
+                    };
+
+                    let display = read_project_name(&path).unwrap_or_else(|| id.clone());
+                    let meta = read_project_meta(&path);
+                    let project_type = if meta.manga_id.is_some()
+                        && !meta.manga_id.as_ref().unwrap().is_empty()
+                    {
+                        "downloaded".to_string()
+                    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty()
+                    {
+                        "imported".to_string()
+                    } else {
+                        "manual".to_string()
+                    };
+                    let sync_dir = meta.sync_dir.clone();
+                    let updated_at_ms = std::fs::metadata(path.as_std_path())
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0);
+
+                    out.push(ProjectSummary {
+                        id,
+                        name: display,
+                        path: path.to_string(),
+                        updated_at_ms,
+                        project_type: Some(project_type),
+                        sync_dir,
+                    });
+                }
+
+                if list_changed {
+                    let _ = serde_json::to_string_pretty(&updated_recents).map(|t| {
+                        let _ = fs::write(r_path.as_std_path(), t);
+                    });
+                }
+            }
+        }
+    }
+
     out.sort_by_key(|project| std::cmp::Reverse(project.updated_at_ms));
     Ok(out)
 }
@@ -123,6 +205,71 @@ pub fn id_from_dir(dir: &Utf8Path) -> Option<String> {
     dir.file_name()
         .and_then(|n| n.strip_suffix(&format!(".{PROJECT_EXT}")))
         .map(|s| s.to_string())
+}
+
+pub fn recent_projects_path() -> Utf8PathBuf {
+    koharu_runtime::default_app_data_root().join("recent_projects.json")
+}
+
+pub fn add_recent_project(path: &Utf8Path) -> Result<()> {
+    let r_path = recent_projects_path();
+    if let Some(parent) = r_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut list = if r_path.exists() {
+        let text = fs::read_to_string(r_path.as_std_path())?;
+        serde_json::from_str::<Vec<Utf8PathBuf>>(&text).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // Remove if exists
+    let abs_path = path.to_path_buf();
+    list.retain(|p| p != &abs_path);
+
+    // Prepend
+    list.insert(0, abs_path);
+
+    // Keep max 50
+    if list.len() > 50 {
+        list.truncate(50);
+    }
+
+    let text = serde_json::to_string_pretty(&list)?;
+    fs::write(r_path.as_std_path(), text)?;
+    Ok(())
+}
+
+pub fn remove_recent_project(path: &Utf8Path) -> Result<()> {
+    let r_path = recent_projects_path();
+    if r_path.exists() {
+        let text = fs::read_to_string(r_path.as_std_path())?;
+        let mut list = serde_json::from_str::<Vec<Utf8PathBuf>>(&text).unwrap_or_default();
+        let abs_path = path.to_path_buf();
+        let old_len = list.len();
+        list.retain(|p| p != &abs_path);
+        if list.len() != old_len {
+            let text = serde_json::to_string_pretty(&list)?;
+            fs::write(r_path.as_std_path(), text)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn find_recent_project_path(id: &str) -> Option<Utf8PathBuf> {
+    let r_path = recent_projects_path();
+    if r_path.exists() {
+        let text = fs::read_to_string(r_path.as_std_path()).ok()?;
+        let list = serde_json::from_str::<Vec<Utf8PathBuf>>(&text).ok()?;
+        for path in list {
+            if let Some(p_id) = id_from_dir(&path) {
+                if p_id == id {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -151,27 +298,129 @@ fn read_project_name(dir: &Utf8Path) -> Option<String> {
     None
 }
 
-/// Lowercase + keep ASCII alphanumerics + `-` + `_`; collapse whitespace to
+pub fn read_project_meta(dir: &Utf8Path) -> koharu_core::ProjectMeta {
+    // 1. Try scene.bin first
+    let scene_path = dir.join("scene.bin");
+    if scene_path.exists() {
+        if let Ok(bytes) = fs::read(scene_path.as_std_path()) {
+            #[derive(serde::Deserialize)]
+            #[allow(dead_code)]
+            struct MinimalScene {
+                project: koharu_core::ProjectMeta,
+            }
+            #[derive(serde::Deserialize)]
+            #[allow(dead_code)]
+            struct MinimalSnapshot {
+                epoch: u64,
+                scene: MinimalScene,
+            }
+            if let Ok(snap) = postcard::from_bytes::<MinimalSnapshot>(&bytes) {
+                return snap.scene.project;
+            }
+        }
+    }
+
+    // 2. Fallback to project.toml
+    let mut meta = koharu_core::ProjectMeta::default();
+    let toml_path = dir.join("project.toml");
+    let Ok(text) = fs::read_to_string(toml_path.as_std_path()) else {
+        return meta;
+    };
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("name") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                meta.name = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
+            }
+        }
+        if trimmed.starts_with("sync_dir") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.sync_dir = Some(val);
+                }
+            }
+        }
+        if trimmed.starts_with("manga_id") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.manga_id = Some(val);
+                }
+            }
+        }
+        if trimmed.starts_with("manga_title") {
+            if let Some(rest) = trimmed.split('=').nth(1) {
+                let val = rest
+                    .trim()
+                    .trim_matches(|c| c == '"' || c == '\'')
+                    .to_string();
+                if !val.is_empty() && val != "null" {
+                    meta.manga_title = Some(val);
+                }
+            }
+        }
+    }
+    meta
+}
+
+fn remove_vietnamese_diacritics(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        let mapped = match ch {
+            'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ'
+            | 'ặ' | 'ẳ' | 'ẵ' | 'À' | 'Á' | 'Ạ' | 'Ả' | 'Ã' | 'Â' | 'Ầ' | 'Ấ' | 'Ậ' | 'Ẩ' | 'Ẫ'
+            | 'Ă' | 'Ằ' | 'Ắ' | 'Ặ' | 'Ẳ' | 'Ẵ' => 'a',
+            'è' | 'é' | 'ẹ' | 'ẻ' | 'ẽ' | 'ê' | 'ề' | 'ế' | 'ệ' | 'ể' | 'ễ' | 'È' | 'É' | 'Ẹ'
+            | 'Ẻ' | 'Ẽ' | 'Ê' | 'Ề' | 'Ế' | 'Ệ' | 'Ể' | 'Ễ' => 'e',
+            'ì' | 'í' | 'ị' | 'ỉ' | 'ĩ' | 'Ì' | 'Í' | 'Ị' | 'Ỉ' | 'Ĩ' => 'i',
+            'ò' | 'ó' | 'ọ' | 'ỏ' | 'õ' | 'ô' | 'ồ' | 'ố' | 'ộ' | 'ổ' | 'ỗ' | 'ơ' | 'ờ' | 'ớ'
+            | 'ợ' | 'ở' | 'ỡ' | 'Ò' | 'Ó' | 'Ọ' | 'Ỏ' | 'Õ' | 'Ô' | 'Ồ' | 'Ố' | 'Ộ' | 'Ổ' | 'Ỗ'
+            | 'Ơ' | 'Ờ' | 'Ớ' | 'Ợ' | 'Ở' | 'Ỡ' => 'o',
+            'ù' | 'ú' | 'ụ' | 'ủ' | 'ũ' | 'ư' | 'ừ' | 'ứ' | 'ự' | 'ử' | 'ữ' | 'Ù' | 'Ú' | 'Ụ'
+            | 'Ủ' | 'Ũ' | 'Ư' | 'Ừ' | 'Ứ' | 'Ự' | 'Ử' | 'Ữ' => 'u',
+            'ỳ' | 'ý' | 'ỵ' | 'ỷ' | 'ỹ' | 'Ỳ' | 'Ý' | 'Ỵ' | 'Ỷ' | 'Ỹ' => 'y',
+            'đ' | 'Đ' => 'd',
+            other => other,
+        };
+        out.push(mapped);
+    }
+    out
+}
+
+/// Lowercase + keep Unicode alphanumeric characters + `-` + `_`; collapse whitespace to
 /// `-`. Keeps the result filesystem-safe across Win/Mac/Linux without needing
 /// heavier slug libraries.
 fn slugify(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
+    let normalized = remove_vietnamese_diacritics(input);
+    let mut out = String::with_capacity(normalized.len());
     let mut prev_dash = false;
-    for ch in input.chars() {
-        let c = ch.to_ascii_lowercase();
-        if c.is_ascii_alphanumeric() {
-            out.push(c);
-            prev_dash = false;
-        } else if c == '-' || c == '_' {
-            if !out.is_empty() && !prev_dash {
+    for ch in normalized.chars() {
+        for c in ch.to_lowercase() {
+            if c.is_alphanumeric() {
+                out.push(c);
+                prev_dash = false;
+            } else if c == '-' || c == '_' {
+                if !out.is_empty() && !prev_dash {
+                    out.push('-');
+                    prev_dash = true;
+                }
+            } else if c.is_whitespace() && !out.is_empty() && !prev_dash {
                 out.push('-');
                 prev_dash = true;
             }
-        } else if c.is_whitespace() && !out.is_empty() && !prev_dash {
-            out.push('-');
-            prev_dash = true;
+            // Other chars dropped silently.
         }
-        // Other chars dropped silently.
     }
     let _ = SystemTime::now().duration_since(UNIX_EPOCH); // silence unused import warn
     while out.ends_with('-') {
@@ -189,7 +438,9 @@ mod tests {
         assert_eq!(slugify("My Project"), "my-project");
         assert_eq!(slugify("  leading and trailing  "), "leading-and-trailing");
         assert_eq!(slugify("under_score_already"), "under-score-already");
-        assert_eq!(slugify("你好 hello"), "hello");
+        assert_eq!(slugify("你好 hello"), "你好-hello");
         assert_eq!(slugify("--dashes--"), "dashes");
+        assert_eq!(slugify("chạy bộ"), "chay-bo");
+        assert_eq!(slugify("じょしこうせい"), "じょしこうせい");
     }
 }

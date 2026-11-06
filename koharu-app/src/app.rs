@@ -138,6 +138,12 @@ impl App {
         self.session.store(Some(session.clone()));
         let handle = autosave::spawn(session.clone());
         *self.autosave.lock().await = Some(handle);
+
+        // Add to recent projects registry
+        if let Err(e) = crate::projects::add_recent_project(&dir) {
+            tracing::warn!("Failed to add project to recents: {e}");
+        }
+
         Ok(session)
     }
 
@@ -177,12 +183,9 @@ impl App {
 
     /// Forward LLM state transitions onto the SSE bus.
     ///
-    /// Local model loads are fire-and-forget — `Model::load_local` flips
-    /// state to `Loading` and spawns the heavy work, so the originating
-    /// HTTP route can't publish any completion event itself. This
-    /// forwarder subscribes to the Model's own state broadcast and fires
-    /// one event per transition so the UI sees Loading / Ready / Failed /
-    /// Empty accurately in real time.
+    /// This forwarder subscribes to the Model's own state broadcast and fires
+    /// one event per transition so the UI sees Loading / Ready / Failed / Empty
+    /// accurately in real time.
     pub fn spawn_llm_forwarder(&self) {
         let mut rx = self.llm.subscribe();
         let bus = self.bus.clone();
@@ -253,11 +256,24 @@ pub fn project_summary(session: &ProjectSession) -> koharu_core::ProjectSummary 
         .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
+
+    let meta = session.scene.read().project.clone();
+    let project_type = if meta.manga_id.is_some() && !meta.manga_id.as_ref().unwrap().is_empty() {
+        Some("downloaded".to_string())
+    } else if meta.sync_dir.is_some() && !meta.sync_dir.as_ref().unwrap().is_empty() {
+        Some("imported".to_string())
+    } else {
+        Some("manual".to_string())
+    };
+    let sync_dir = meta.sync_dir.clone();
+
     koharu_core::ProjectSummary {
         id,
         name: session.scene.read().project.name.clone(),
         path: session.dir.to_string(),
         updated_at_ms,
+        project_type,
+        sync_dir,
     }
 }
 

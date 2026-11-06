@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 
 import { useCanvasDrawing, type CanvasDims } from '@/hooks/useCanvasDrawing'
 import type { PointerToDocumentFn } from '@/hooks/usePointerToDocument'
-import { getConfig } from '@/lib/api/default/default'
+import { getConfig, putMask, startPipeline } from '@/lib/api/default/default'
 import type { Page } from '@/lib/api/schemas'
 import { invalidateScene } from '@/lib/io/scene'
 import { useEditorUiStore } from '@/lib/stores/editorUiStore'
@@ -14,6 +14,10 @@ import type { ToolMode } from '@/lib/types'
 async function convertBytesToBitmap(bytes: Uint8Array): Promise<ImageBitmap> {
   const blob = new Blob([bytes as unknown as BlobPart])
   return createImageBitmap(blob)
+}
+
+function pngBytesToBlob(bytes: Uint8Array): Blob {
+  return new Blob([bytes as unknown as BlobPart], { type: 'image/png' })
 }
 
 type MaskDrawingOptions = {
@@ -28,10 +32,9 @@ type MaskDrawingOptions = {
 
 /**
  * Repair-brush canvas that edits the `Mask { role: segment }` node. On stroke
- * end, it performs an atomic update:
+ * end, it saves the updated mask first, then starts localized inpainting:
  *   1. PUT the updated mask to `/api/v1/pages/{id}/masks/segment` (raw PNG).
- *   2. Includes inpainter pipeline and region parameters in the query string
- *      to trigger the AI result in the same backend transaction.
+ *   2. Starts the configured inpainter with the stroke bounding box as region.
  */
 export function useMaskDrawing({
   mode,
@@ -44,6 +47,7 @@ export function useMaskDrawing({
   const inpaintQueueRef = useRef<Promise<void>>(Promise.resolve())
   const isEraseMode = mode === 'eraser'
   const isActive = enabled && (mode === 'repairBrush' || isEraseMode)
+  const brushSize = usePreferencesStore((state) => state.brushConfig.size)
 
   const dims: CanvasDims | null = page
     ? {
@@ -56,7 +60,7 @@ export function useMaskDrawing({
   const { canvasRef, bind: rawBind } = useCanvasDrawing(dims, pointerToDocument, {
     getColor: () => (isEraseMode ? '#000000' : '#ffffff'),
     blendMode: 'source-over',
-    getBrushSize: () => usePreferencesStore.getState().brushConfig.size,
+    getBrushSize: () => brushSize,
     enabled: showMask,
     onCanvasInit: (ctx, d) => {
       if (segmentData) {
@@ -85,25 +89,20 @@ export function useMaskDrawing({
         try {
           const config = await getConfig()
           const inpainter = config.pipeline?.inpainter || 'lama-manga'
+          const bubbleSegmenter = config.pipeline?.bubble_segmenter
 
-          const params = new URLSearchParams({
-            pipeline: inpainter,
-            x: region.x.toString(),
-            y: region.y.toString(),
-            width: region.width.toString(),
-            height: region.height.toString(),
-          })
-
-          const res = await fetch(`/api/v1/pages/${page.id}/masks/segment?${params}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'image/png' },
-            body: fullPng as unknown as BodyInit,
-          })
-          if (!res.ok) throw new Error(`mask PUT failed: ${res.status}`)
+          await putMask(page.id, 'segment', pngBytesToBlob(fullPng))
           await invalidateScene()
+
+          await startPipeline({
+            steps: [bubbleSegmenter, inpainter].filter((step): step is string => !!step),
+            pages: [page.id],
+            region,
+          })
+
           useEditorUiStore.getState().setShowInpaintedImage(true)
         } catch (e) {
-          useEditorUiStore.getState().showError(String(e))
+          useEditorUiStore.getState().showError(e instanceof Error ? e.message : String(e))
         }
       })
 
