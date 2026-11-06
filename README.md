@@ -1,3 +1,7 @@
+> **Customized fork maintained by IKurokami.** Based on the original [Koharu](https://github.com/koharu-rs/koharu), with additional manga source integrations, translation/export workflows, UI and localization improvements. See [Fork-specific changes](FORK_CHANGES.md) and [merged PR #1](https://github.com/IKurokami/koharu/pull/1) for details and attribution.
+
+---
+
 <p align="center">
 <img src="https://github.com/mayocream/koharu/blob/main/ui/public/icon-large.png?raw=true">
 </p>
